@@ -41,6 +41,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+RTC_HandleTypeDef hrtc;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -51,6 +53,7 @@ UART_HandleTypeDef huart2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
 void process_uart_command(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
@@ -94,6 +97,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart2, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer));
   /* USER CODE END 2 */
@@ -131,9 +135,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 16;
@@ -159,6 +165,69 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* USER CODE BEGIN Check_RTC_BKUP */
+
+  /* USER CODE END Check_RTC_BKUP */
+
+  /** Initialize RTC and set the Time and Date
+  */
+  sTime.Hours = 0;
+  sTime.Minutes = 0;
+  sTime.Seconds = 0;
+  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
+  sDate.Month = RTC_MONTH_JANUARY;
+  sDate.Date = 1;
+  sDate.Year = 0;
+
+  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
 }
 
 /**
@@ -275,37 +344,71 @@ void process_uart_command(UART_HandleTypeDef *huart) {
   }
 
   if (!strcmp(command, "help")) {
-    sprintf(uart_tx_buffer, "Commands:\nhelp\nget_time\nset_time <hh> <mm>\nget_track\n");
+    sprintf(uart_tx_buffer, "Commands:\nhelp\nget_time\nset_time <hh> <mm> <ss>\nget_track\n");
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
-    return;
   } else if (!strcmp(command, "get_time")) {
-    //TODO: get_time
-    sprintf(uart_tx_buffer, "TODO: %s\n", command);
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
-    return;
-  } else if (!strcmp(command, "set_time")) {
-    //TODO: set_time
-    int hh = 0;
-    int mm = 0;
-    const size_t offset = 9;
-    if (sscanf(command_buffer + offset, "%d %d", &hh, &mm) != 2) {
-      sprintf(uart_tx_buffer, "Error: cannot parse hh mm: %s\n", command_buffer + offset);
+    RTC_TimeTypeDef time;
+    RTC_DateTypeDef date;   // it won't work without reading date
+    if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
+        HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
+      sprintf(uart_tx_buffer, "Error: could not get time\n");
       HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
       return;
     }
-    //TODO: data validation
-    sprintf(uart_tx_buffer, "set time to %d:%d\n", hh, mm);
+    sprintf(uart_tx_buffer, "Time: %02d:%02d:%02d\n", time.Hours, time.Minutes, time.Seconds);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
-    return;
+  } else if (!strcmp(command, "set_time")) {
+    int hours = 0;
+    int minutes = 0;
+    int seconds = 0;
+    const size_t offset = 9;
+    if (sscanf(command_buffer + offset, "%d %d %d", &hours, &minutes, &seconds) != 3) {
+      sprintf(uart_tx_buffer, "Error: cannot parse hh mm ss: %s\n", command_buffer + offset);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      return;
+    }
+    if (hours < 0 || hours >= 24) {
+      sprintf(uart_tx_buffer, "Error: wrong hours value: %d\n", hours);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      return;
+    }
+    if (minutes < 0 || minutes >= 60) {
+      sprintf(uart_tx_buffer, "Error: wrong minutes value: %d\n", minutes);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      return;
+    }
+    if (seconds < 0 || seconds >= 60) {
+      sprintf(uart_tx_buffer, "Error: wrong seconds value: %d\n", seconds);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      return;
+    }
+    // could sscanf directly to this struct, but it would break data validation
+    RTC_TimeTypeDef time;
+    RTC_DateTypeDef date;   // it won't work without reading date
+    if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
+        HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
+      sprintf(uart_tx_buffer, "Error: could not get time\n");
+      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      return;
+    }
+    time.Hours = hours;
+    time.Minutes = minutes;
+    time.Seconds = seconds;
+    if (HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
+        HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
+      sprintf(uart_tx_buffer, "Error: could not set time\n");
+      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      return;
+    }
+    sprintf(uart_tx_buffer, "set time to %02d:%02d:%02d\n", hours, minutes, seconds);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
   } else if (!strcmp(command, "get_track")) {
     //TODO: get_track
-	sprintf(uart_tx_buffer, "TODO: %s\n", command);
-	HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
-    return;
+    sprintf(uart_tx_buffer, "TODO: %s\n", command);
+	  HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
   } else {
     sprintf(uart_tx_buffer, "Error: unknown command: %s\n", command);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
-    return;
   }
 }
 /* USER CODE END 4 */
