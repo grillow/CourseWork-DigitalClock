@@ -52,5 +52,8 @@ Mkfile.old
 dkms.conf
 
 # Stm32CubeIDE
-Debug/
-Release/
+.metadata
+.settings
+[Rr]elease
+[Dd]ebug
+*.launch
