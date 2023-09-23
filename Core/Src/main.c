@@ -32,7 +32,29 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define LED_A_RESET HAL_GPIO_WritePin(LED_A_GPIO_Port, LED_A_Pin, GPIO_PIN_RESET);
+#define LED_A_SET   HAL_GPIO_WritePin(LED_A_GPIO_Port, LED_A_Pin, GPIO_PIN_SET);
+#define LED_B_RESET HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_RESET);
+#define LED_B_SET   HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_SET);
+#define LED_C_RESET HAL_GPIO_WritePin(LED_C_GPIO_Port, LED_C_Pin, GPIO_PIN_RESET);
+#define LED_C_SET   HAL_GPIO_WritePin(LED_C_GPIO_Port, LED_C_Pin, GPIO_PIN_SET);
+#define LED_D_RESET HAL_GPIO_WritePin(LED_D_GPIO_Port, LED_D_Pin, GPIO_PIN_RESET);
+#define LED_D_SET   HAL_GPIO_WritePin(LED_D_GPIO_Port, LED_D_Pin, GPIO_PIN_SET);
+#define LED_E_RESET HAL_GPIO_WritePin(LED_E_GPIO_Port, LED_E_Pin, GPIO_PIN_RESET);
+#define LED_E_SET   HAL_GPIO_WritePin(LED_E_GPIO_Port, LED_E_Pin, GPIO_PIN_SET);
+#define LED_F_RESET HAL_GPIO_WritePin(LED_F_GPIO_Port, LED_F_Pin, GPIO_PIN_RESET);
+#define LED_F_SET   HAL_GPIO_WritePin(LED_F_GPIO_Port, LED_F_Pin, GPIO_PIN_SET);
+#define LED_G_RESET HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_RESET);
+#define LED_G_SET   HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_SET);
 
+#define LED_KEY_1_RESET HAL_GPIO_WritePin(LED_KEY_1_GPIO_Port, LED_KEY_1_Pin, GPIO_PIN_RESET);
+#define LED_KEY_1_SET   HAL_GPIO_WritePin(LED_KEY_1_GPIO_Port, LED_KEY_1_Pin, GPIO_PIN_SET);
+#define LED_KEY_2_RESET HAL_GPIO_WritePin(LED_KEY_2_GPIO_Port, LED_KEY_2_Pin, GPIO_PIN_RESET);
+#define LED_KEY_2_SET   HAL_GPIO_WritePin(LED_KEY_2_GPIO_Port, LED_KEY_2_Pin, GPIO_PIN_SET);
+#define LED_KEY_3_RESET HAL_GPIO_WritePin(LED_KEY_3_GPIO_Port, LED_KEY_3_Pin, GPIO_PIN_RESET);
+#define LED_KEY_3_SET   HAL_GPIO_WritePin(LED_KEY_3_GPIO_Port, LED_KEY_3_Pin, GPIO_PIN_SET);
+#define LED_KEY_4_RESET HAL_GPIO_WritePin(LED_KEY_4_GPIO_Port, LED_KEY_4_Pin, GPIO_PIN_RESET);
+#define LED_KEY_4_SET   HAL_GPIO_WritePin(LED_KEY_4_GPIO_Port, LED_KEY_4_Pin, GPIO_PIN_SET);
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -56,6 +78,8 @@ static void MX_USART2_UART_Init(void);
 static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
 void process_uart_command(UART_HandleTypeDef *huart);
+void led_select(uint8_t key);
+void led_display(uint8_t number);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -104,16 +128,32 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
-	HAL_Delay(50);
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-	HAL_Delay(150);
+    // TODO: could probably use timer interruption
+    RTC_TimeTypeDef time;
+    RTC_DateTypeDef date;   // it won't work without reading date
+    if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
+        HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
+      // failed
+      continue;
+    }
+    const uint32_t LED_DELAY_MS = 1;
+    led_select(1);
+    led_display(time.Hours / 10);
+    HAL_Delay(LED_DELAY_MS);
+    led_select(2);
+    led_display(time.Hours % 10);
+    HAL_Delay(LED_DELAY_MS);
+    led_select(3);
+    led_display(time.Minutes / 10);
+    HAL_Delay(LED_DELAY_MS);
+    led_select(4);
+    led_display(time.Minutes % 10);
+    HAL_Delay(LED_DELAY_MS);
   }
   /* USER CODE END 3 */
 }
@@ -281,7 +321,14 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|LED_KEY_4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, LED_E_Pin|LED_D_Pin|LED_C_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, LED_B_Pin|LED_KEY_3_Pin|LED_G_Pin|LED_F_Pin
+                          |LED_A_Pin|LED_KEY_2_Pin|LED_KEY_1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -289,12 +336,28 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LD2_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin;
+  /*Configure GPIO pins : LD2_Pin LED_KEY_4_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin|LED_KEY_4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED_E_Pin LED_D_Pin LED_C_Pin */
+  GPIO_InitStruct.Pin = LED_E_Pin|LED_D_Pin|LED_C_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED_B_Pin LED_KEY_3_Pin LED_G_Pin LED_F_Pin
+                           LED_A_Pin LED_KEY_2_Pin LED_KEY_1_Pin */
+  GPIO_InitStruct.Pin = LED_B_Pin|LED_KEY_3_Pin|LED_G_Pin|LED_F_Pin
+                          |LED_A_Pin|LED_KEY_2_Pin|LED_KEY_1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -309,27 +372,27 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
   const char received_byte = uart_rx_buffer[0];
   switch (received_byte) {
-    default:
-      if (command_buffer_index >= sizeof(command_buffer)) {
-        if (!uart_rx_buffer_overflow) {
-        	uart_rx_buffer_overflow = 1;
-        	sprintf(uart_tx_buffer, "Error: command shouldn't be longer than %d\n", sizeof(command_buffer));
-            HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
-            command_buffer_index = 0;
-            memset(command_buffer, 0, sizeof(command_buffer));
-        }
-      } else {
-        command_buffer[command_buffer_index++] = received_byte;
-      }
-      break;
-    case '\n':
-      command_buffer[command_buffer_index] = '\0';
-      command_buffer_index = 0;
+  default:
+    if (command_buffer_index >= sizeof(command_buffer)) {
       if (!uart_rx_buffer_overflow) {
-    	  process_uart_command(huart);
+        uart_rx_buffer_overflow = 1;
+        sprintf(uart_tx_buffer, "Error: command shouldn't be longer than %d\n", sizeof(command_buffer));
+          HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+          command_buffer_index = 0;
+          memset(command_buffer, 0, sizeof(command_buffer));
       }
-      uart_rx_buffer_overflow = 0;
-      memset(command_buffer, 0, sizeof(command_buffer));
+    } else {
+      command_buffer[command_buffer_index++] = received_byte;
+    }
+    break;
+  case '\n':
+    command_buffer[command_buffer_index] = '\0';
+    command_buffer_index = 0;
+    if (!uart_rx_buffer_overflow) {
+      process_uart_command(huart);
+    }
+    uart_rx_buffer_overflow = 0;
+    memset(command_buffer, 0, sizeof(command_buffer));
   }
   HAL_UART_Receive_IT(huart, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer));
 }
@@ -409,6 +472,134 @@ void process_uart_command(UART_HandleTypeDef *huart) {
   } else {
     sprintf(uart_tx_buffer, "Error: unknown command: %s\n", command);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+  }
+}
+
+void led_select(uint8_t key) {
+  switch (key) {
+  default:
+    return;
+  case 1:
+    LED_KEY_1_SET;
+    LED_KEY_2_RESET;
+    LED_KEY_3_RESET;
+    LED_KEY_4_RESET;
+    break;
+  case 2:
+    LED_KEY_1_RESET;
+    LED_KEY_2_SET;
+    LED_KEY_3_RESET;
+    LED_KEY_4_RESET;
+    break;
+  case 3:
+    LED_KEY_1_RESET;
+    LED_KEY_2_RESET;
+    LED_KEY_3_SET;
+    LED_KEY_4_RESET;
+    break;
+  case 4:
+    LED_KEY_1_RESET;
+    LED_KEY_2_RESET;
+    LED_KEY_3_RESET;
+    LED_KEY_4_SET;
+    break;
+  }
+}
+
+void led_display(uint8_t number) {
+  number %= 10;
+
+  switch (number) {
+  case 0:
+    LED_A_RESET;
+    LED_B_RESET;
+    LED_C_RESET;
+    LED_D_RESET;
+    LED_E_RESET;
+    LED_F_RESET;
+    LED_G_SET;
+    break;
+  case 1:
+    LED_A_SET;
+    LED_B_RESET;
+    LED_C_RESET;
+    LED_D_SET;
+    LED_E_SET;
+    LED_F_SET;
+    LED_G_SET;
+    break;
+  case 2:
+    LED_A_RESET;
+    LED_B_RESET;
+    LED_C_SET;
+    LED_D_RESET;
+    LED_E_RESET;
+    LED_F_SET;
+    LED_G_RESET;
+    break;
+  case 3:
+    LED_A_RESET;
+    LED_B_RESET;
+    LED_C_RESET;
+    LED_D_RESET;
+    LED_E_SET;
+    LED_F_SET;
+    LED_G_RESET;
+    break;
+  case 4:
+    LED_A_SET;
+    LED_B_RESET;
+    LED_C_RESET;
+    LED_D_SET;
+    LED_E_SET;
+    LED_F_RESET;
+    LED_G_RESET;
+    break;
+  case 5:
+    LED_A_RESET;
+    LED_B_SET;
+    LED_C_RESET;
+    LED_D_RESET;
+    LED_E_SET;
+    LED_F_RESET;
+    LED_G_RESET;
+    break;
+  case 6:
+    LED_A_RESET;
+    LED_B_SET;
+    LED_C_RESET;
+    LED_D_RESET;
+    LED_E_RESET;
+    LED_F_RESET;
+    LED_G_RESET;
+    break;
+  case 7:
+    LED_A_RESET;
+    LED_B_RESET;
+    LED_C_RESET;
+    LED_D_SET;
+    LED_E_SET;
+    LED_F_SET;
+    LED_G_SET;
+    break;
+  case 8:
+    LED_A_RESET;
+    LED_B_RESET;
+    LED_C_RESET;
+    LED_D_RESET;
+    LED_E_RESET;
+    LED_F_RESET;
+    LED_G_RESET;
+    break;
+  case 9:
+    LED_A_RESET;
+    LED_B_RESET;
+    LED_C_RESET;
+    LED_D_RESET;
+    LED_E_SET;
+    LED_F_RESET;
+    LED_G_RESET;
+    break;
   }
 }
 /* USER CODE END 4 */
