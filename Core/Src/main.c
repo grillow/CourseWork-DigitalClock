@@ -400,7 +400,7 @@ void process_uart_command(UART_HandleTypeDef *huart) {
       HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
       return;
     }
-    sprintf(uart_tx_buffer, "set time to %02d:%02d:%02d\n", hours, minutes, seconds);
+    sprintf(uart_tx_buffer, "Time set to %02d:%02d:%02d\n", hours, minutes, seconds);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
   } else if (!strcmp(command, "get_track")) {
     //TODO: get_track
