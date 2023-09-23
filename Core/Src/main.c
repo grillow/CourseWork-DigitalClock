@@ -32,29 +32,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define LED_A_RESET HAL_GPIO_WritePin(LED_A_GPIO_Port, LED_A_Pin, GPIO_PIN_RESET);
-#define LED_A_SET   HAL_GPIO_WritePin(LED_A_GPIO_Port, LED_A_Pin, GPIO_PIN_SET);
-#define LED_B_RESET HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_RESET);
-#define LED_B_SET   HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_SET);
-#define LED_C_RESET HAL_GPIO_WritePin(LED_C_GPIO_Port, LED_C_Pin, GPIO_PIN_RESET);
-#define LED_C_SET   HAL_GPIO_WritePin(LED_C_GPIO_Port, LED_C_Pin, GPIO_PIN_SET);
-#define LED_D_RESET HAL_GPIO_WritePin(LED_D_GPIO_Port, LED_D_Pin, GPIO_PIN_RESET);
-#define LED_D_SET   HAL_GPIO_WritePin(LED_D_GPIO_Port, LED_D_Pin, GPIO_PIN_SET);
-#define LED_E_RESET HAL_GPIO_WritePin(LED_E_GPIO_Port, LED_E_Pin, GPIO_PIN_RESET);
-#define LED_E_SET   HAL_GPIO_WritePin(LED_E_GPIO_Port, LED_E_Pin, GPIO_PIN_SET);
-#define LED_F_RESET HAL_GPIO_WritePin(LED_F_GPIO_Port, LED_F_Pin, GPIO_PIN_RESET);
-#define LED_F_SET   HAL_GPIO_WritePin(LED_F_GPIO_Port, LED_F_Pin, GPIO_PIN_SET);
-#define LED_G_RESET HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_RESET);
-#define LED_G_SET   HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_SET);
 
-#define LED_KEY_1_RESET HAL_GPIO_WritePin(LED_KEY_1_GPIO_Port, LED_KEY_1_Pin, GPIO_PIN_RESET);
-#define LED_KEY_1_SET   HAL_GPIO_WritePin(LED_KEY_1_GPIO_Port, LED_KEY_1_Pin, GPIO_PIN_SET);
-#define LED_KEY_2_RESET HAL_GPIO_WritePin(LED_KEY_2_GPIO_Port, LED_KEY_2_Pin, GPIO_PIN_RESET);
-#define LED_KEY_2_SET   HAL_GPIO_WritePin(LED_KEY_2_GPIO_Port, LED_KEY_2_Pin, GPIO_PIN_SET);
-#define LED_KEY_3_RESET HAL_GPIO_WritePin(LED_KEY_3_GPIO_Port, LED_KEY_3_Pin, GPIO_PIN_RESET);
-#define LED_KEY_3_SET   HAL_GPIO_WritePin(LED_KEY_3_GPIO_Port, LED_KEY_3_Pin, GPIO_PIN_SET);
-#define LED_KEY_4_RESET HAL_GPIO_WritePin(LED_KEY_4_GPIO_Port, LED_KEY_4_Pin, GPIO_PIN_RESET);
-#define LED_KEY_4_SET   HAL_GPIO_WritePin(LED_KEY_4_GPIO_Port, LED_KEY_4_Pin, GPIO_PIN_SET);
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,6 +42,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 RTC_HandleTypeDef hrtc;
+
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 
@@ -76,10 +56,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_RTC_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void process_uart_command(UART_HandleTypeDef *huart);
-void led_select(uint8_t key);
-void led_display(uint8_t number);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -122,8 +101,14 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_RTC_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart2, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer));
+  if (HAL_TIM_Base_Start_IT(&htim3) != HAL_OK) {
+    Error_Handler();
+  }
+  if (HAL_UART_Receive_IT(&huart2, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer)) != HAL_OK) {
+    Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -133,27 +118,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // TODO: could probably use timer interruption
-    RTC_TimeTypeDef time;
-    RTC_DateTypeDef date;   // it won't work without reading date
-    if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
-        HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
-      // failed
-      continue;
-    }
-    const uint32_t LED_DELAY_MS = 1;
-    led_select(1);
-    led_display(time.Hours / 10);
-    HAL_Delay(LED_DELAY_MS);
-    led_select(2);
-    led_display(time.Hours % 10);
-    HAL_Delay(LED_DELAY_MS);
-    led_select(3);
-    led_display(time.Minutes / 10);
-    HAL_Delay(LED_DELAY_MS);
-    led_select(4);
-    led_display(time.Minutes % 10);
-    HAL_Delay(LED_DELAY_MS);
+
   }
   /* USER CODE END 3 */
 }
@@ -175,11 +140,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSE;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 16;
@@ -267,6 +231,51 @@ static void MX_RTC_Init(void)
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 8399;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 10;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
@@ -472,134 +481,6 @@ void process_uart_command(UART_HandleTypeDef *huart) {
   } else {
     sprintf(uart_tx_buffer, "Error: unknown command: %s\n", command);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
-  }
-}
-
-void led_select(uint8_t key) {
-  switch (key) {
-  default:
-    return;
-  case 1:
-    LED_KEY_1_SET;
-    LED_KEY_2_RESET;
-    LED_KEY_3_RESET;
-    LED_KEY_4_RESET;
-    break;
-  case 2:
-    LED_KEY_1_RESET;
-    LED_KEY_2_SET;
-    LED_KEY_3_RESET;
-    LED_KEY_4_RESET;
-    break;
-  case 3:
-    LED_KEY_1_RESET;
-    LED_KEY_2_RESET;
-    LED_KEY_3_SET;
-    LED_KEY_4_RESET;
-    break;
-  case 4:
-    LED_KEY_1_RESET;
-    LED_KEY_2_RESET;
-    LED_KEY_3_RESET;
-    LED_KEY_4_SET;
-    break;
-  }
-}
-
-void led_display(uint8_t number) {
-  number %= 10;
-
-  switch (number) {
-  case 0:
-    LED_A_RESET;
-    LED_B_RESET;
-    LED_C_RESET;
-    LED_D_RESET;
-    LED_E_RESET;
-    LED_F_RESET;
-    LED_G_SET;
-    break;
-  case 1:
-    LED_A_SET;
-    LED_B_RESET;
-    LED_C_RESET;
-    LED_D_SET;
-    LED_E_SET;
-    LED_F_SET;
-    LED_G_SET;
-    break;
-  case 2:
-    LED_A_RESET;
-    LED_B_RESET;
-    LED_C_SET;
-    LED_D_RESET;
-    LED_E_RESET;
-    LED_F_SET;
-    LED_G_RESET;
-    break;
-  case 3:
-    LED_A_RESET;
-    LED_B_RESET;
-    LED_C_RESET;
-    LED_D_RESET;
-    LED_E_SET;
-    LED_F_SET;
-    LED_G_RESET;
-    break;
-  case 4:
-    LED_A_SET;
-    LED_B_RESET;
-    LED_C_RESET;
-    LED_D_SET;
-    LED_E_SET;
-    LED_F_RESET;
-    LED_G_RESET;
-    break;
-  case 5:
-    LED_A_RESET;
-    LED_B_SET;
-    LED_C_RESET;
-    LED_D_RESET;
-    LED_E_SET;
-    LED_F_RESET;
-    LED_G_RESET;
-    break;
-  case 6:
-    LED_A_RESET;
-    LED_B_SET;
-    LED_C_RESET;
-    LED_D_RESET;
-    LED_E_RESET;
-    LED_F_RESET;
-    LED_G_RESET;
-    break;
-  case 7:
-    LED_A_RESET;
-    LED_B_RESET;
-    LED_C_RESET;
-    LED_D_SET;
-    LED_E_SET;
-    LED_F_SET;
-    LED_G_SET;
-    break;
-  case 8:
-    LED_A_RESET;
-    LED_B_RESET;
-    LED_C_RESET;
-    LED_D_RESET;
-    LED_E_RESET;
-    LED_F_RESET;
-    LED_G_RESET;
-    break;
-  case 9:
-    LED_A_RESET;
-    LED_B_RESET;
-    LED_C_RESET;
-    LED_D_RESET;
-    LED_E_SET;
-    LED_F_RESET;
-    LED_G_RESET;
-    break;
   }
 }
 /* USER CODE END 4 */
