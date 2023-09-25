@@ -532,7 +532,7 @@ void process_uart_command(UART_HandleTypeDef *huart) {
     RTC_DateTypeDef date;   // it won't work without reading date
     if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
         HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
-      sprintf(uart_tx_buffer, "Error: could not get time\n");
+      sprintf(uart_tx_buffer, "Error: could not set time\n");
       HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
       return;
     }
@@ -572,10 +572,17 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
   case HAL_TIM_ACTIVE_CHANNEL_1:
     htim->Instance->CNT = 0;
     break;
-  case HAL_TIM_ACTIVE_CHANNEL_2:
-    light_duration = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
+  case HAL_TIM_ACTIVE_CHANNEL_2: {
+    const uint32_t time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
+    if (time < 5000) {
+      // crutch, ignore if time is less than 0.5s
+      // TODO: use interrupts+timers to deal with noise, not this...
+    } else {
+      light_duration = time;
+    }
     //TODO: EEPROM
     break;
+  }
   default:
     break;
   }
