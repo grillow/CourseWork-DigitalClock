@@ -42,6 +42,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 RTC_HandleTypeDef hrtc;
 
 TIM_HandleTypeDef htim2;
@@ -62,6 +64,7 @@ static void MX_RTC_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 void process_uart_command(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
@@ -77,8 +80,6 @@ char uart_tx_buffer[256];
 // -1 - low, 0 - no change, 1 - high
 int light_sensor_state = 0;
 int light_sensor_state_requested = 0;
-
-uint32_t light_duration = 0;
 /* USER CODE END 0 */
 
 /**
@@ -114,6 +115,7 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM6_Init();
   MX_TIM2_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   if (HAL_TIM_Base_Start_IT(&htim3) != HAL_OK) {
     Error_Handler();
@@ -189,6 +191,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 400000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
@@ -589,6 +625,10 @@ void process_uart_command(UART_HandleTypeDef *huart)
     sprintf(uart_tx_buffer, "Time set to %02d:%02d:%02d\n", hours, minutes, seconds);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
   } else if (!strcmp(command, "get_daylight_time")) {
+    uint32_t light_duration = 0;
+    if (HAL_I2C_Mem_Read(&hi2c1, EEPROM_I2C_ADDRESS, EEPROM_DATA_ADDRESS, 2, (uint8_t*)&light_duration, sizeof(light_duration), HAL_MAX_DELAY) != HAL_OK) {
+      //TODO: oy vey (HAL_BUSY)
+    }
     const uint32_t seconds = light_duration / 10000;
     const uint32_t minutes = seconds / 60;
     const uint32_t hours   = minutes / 60;

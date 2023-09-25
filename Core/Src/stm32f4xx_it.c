@@ -60,10 +60,10 @@ extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim6;
 extern UART_HandleTypeDef huart2;
 /* USER CODE BEGIN EV */
+extern I2C_HandleTypeDef hi2c1;
 extern RTC_HandleTypeDef hrtc;
-
 extern TIM_HandleTypeDef htim2;
-extern uint32_t light_duration;
+
 extern int light_sensor_state;
 extern int light_sensor_state_requested;
 /* USER CODE END EV */
@@ -296,10 +296,12 @@ void TIM6_DAC_IRQHandler(void)
   } else if (light_sensor_state_requested == 1) {
     if (light_sensor_state == -1) {
       light_sensor_state = 1;
-      light_duration = htim2.Instance->CNT;
+      const uint32_t light_duration = htim2.Instance->CNT;
       HAL_TIM_Base_Stop(&htim2);
+      if (HAL_I2C_Mem_Write(&hi2c1, EEPROM_I2C_ADDRESS, EEPROM_DATA_ADDRESS, 2, (uint8_t*)&light_duration, sizeof(light_duration), HAL_MAX_DELAY) != HAL_OK) {
+        //TODO: oy vey (HAL_BUSY)
+      }
     }
-    //TODO: EEPROM
   }
   light_sensor_state_requested = 0;
   /* USER CODE END TIM6_DAC_IRQn 1 */
