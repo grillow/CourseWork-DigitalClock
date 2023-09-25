@@ -46,6 +46,7 @@ RTC_HandleTypeDef hrtc;
 
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim6;
 
 UART_HandleTypeDef huart2;
 
@@ -59,6 +60,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_RTC_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_TIM6_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 void process_uart_command(UART_HandleTypeDef *huart);
@@ -71,6 +73,10 @@ char uart_rx_buffer[1];
 char command_buffer[32] = {0};
 size_t command_buffer_index = 0;
 char uart_tx_buffer[256];
+
+// -1 - low, 0 - no change, 1 - high
+int light_sensor_state = 0;
+int light_sensor_state_requested = 0;
 
 uint32_t light_duration = 0;
 /* USER CODE END 0 */
@@ -106,17 +112,23 @@ int main(void)
   MX_USART2_UART_Init();
   MX_RTC_Init();
   MX_TIM3_Init();
+  MX_TIM6_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   if (HAL_TIM_Base_Start_IT(&htim3) != HAL_OK) {
     Error_Handler();
   }
-
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
-
   if (HAL_UART_Receive_IT(&huart2, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer)) != HAL_OK) {
     Error_Handler();
+  }
+  HAL_Delay(1000);
+  if (HAL_GPIO_ReadPin(LIGHT_SENSOR_D0_GPIO_Port, LIGHT_SENSOR_D0_Pin) == GPIO_PIN_RESET) {
+    light_sensor_state = -1;
+    if (HAL_TIM_Base_Start(&htim2) != HAL_OK) {
+      Error_Handler();
+    }
+  } else {
+    light_sensor_state = 1;
   }
   /* USER CODE END 2 */
 
@@ -256,7 +268,6 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_IC_InitTypeDef sConfigIC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -276,28 +287,9 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
-  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
-  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 15;
-  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
-  sConfigIC.ICSelection = TIM_ICSELECTION_INDIRECTTI;
-  sConfigIC.ICFilter = 0;
-  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -349,6 +341,44 @@ static void MX_TIM3_Init(void)
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 8399;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 10000;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
 
 }
 
@@ -418,6 +448,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : LIGHT_SENSOR_D0_Pin */
+  GPIO_InitStruct.Pin = LIGHT_SENSOR_D0_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(LIGHT_SENSOR_D0_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pins : LD2_Pin LED_KEY_4_Pin */
   GPIO_InitStruct.Pin = LD2_Pin|LED_KEY_4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -440,6 +476,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -479,7 +519,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   HAL_UART_Receive_IT(huart, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer));
 }
 
-void process_uart_command(UART_HandleTypeDef *huart) {
+void process_uart_command(UART_HandleTypeDef *huart)
+{
   char command[sizeof(command_buffer)] = {0};
 
   if (sscanf(command_buffer, "%s ", command) != 1) {
@@ -563,29 +604,27 @@ void process_uart_command(UART_HandleTypeDef *huart) {
   }
 }
 
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
-  if (htim->Instance != TIM2) {
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin != LIGHT_SENSOR_D0_Pin) {
     return;
   }
 
-  switch (htim->Channel) {
-  case HAL_TIM_ACTIVE_CHANNEL_1:
-    htim->Instance->CNT = 0;
+  if (htim6.Instance->CR1 & TIM_CR1_CEN) {
+    HAL_TIM_Base_Stop_IT(&htim6);
+  }
+
+  switch (HAL_GPIO_ReadPin(LIGHT_SENSOR_D0_GPIO_Port, LIGHT_SENSOR_D0_Pin)) {
+  case GPIO_PIN_RESET:
+    light_sensor_state_requested = -1;
     break;
-  case HAL_TIM_ACTIVE_CHANNEL_2: {
-    const uint32_t time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
-    if (time < 5000) {
-      // crutch, ignore if time is less than 0.5s
-      // TODO: use interrupts+timers to deal with noise, not this...
-    } else {
-      light_duration = time;
-    }
-    //TODO: EEPROM
+  case GPIO_PIN_SET:
+    light_sensor_state_requested = 1;
     break;
   }
-  default:
-    break;
-  }
+
+  htim6.Instance->CNT = 0;
+  HAL_TIM_Base_Start_IT(&htim6);
 }
 /* USER CODE END 4 */
 
