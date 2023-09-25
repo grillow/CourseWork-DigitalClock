@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include <stdio.h>
+#include <inttypes.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,6 +44,7 @@
 /* Private variables ---------------------------------------------------------*/
 RTC_HandleTypeDef hrtc;
 
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
@@ -57,6 +59,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_RTC_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 void process_uart_command(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
@@ -67,8 +70,9 @@ int uart_rx_buffer_overflow = 0;
 char uart_rx_buffer[1];
 char command_buffer[32] = {0};
 size_t command_buffer_index = 0;
-
 char uart_tx_buffer[256];
+
+uint32_t light_duration = 0;
 /* USER CODE END 0 */
 
 /**
@@ -102,10 +106,15 @@ int main(void)
   MX_USART2_UART_Init();
   MX_RTC_Init();
   MX_TIM3_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   if (HAL_TIM_Base_Start_IT(&htim3) != HAL_OK) {
     Error_Handler();
   }
+
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
+
   if (HAL_UART_Receive_IT(&huart2, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer)) != HAL_OK) {
     Error_Handler();
   }
@@ -118,7 +127,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
   }
   /* USER CODE END 3 */
 }
@@ -231,6 +239,71 @@ static void MX_RTC_Init(void)
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 8399;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 15;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_INDIRECTTI;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
 
 }
 
@@ -376,7 +449,7 @@ static void MX_GPIO_Init(void)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance != USART2) {
-	return;
+    return;
   }
 
   const char received_byte = uart_rx_buffer[0];
@@ -416,7 +489,7 @@ void process_uart_command(UART_HandleTypeDef *huart) {
   }
 
   if (!strcmp(command, "help")) {
-    sprintf(uart_tx_buffer, "Commands:\nhelp\nget_time\nset_time <hh> <mm> <ss>\nget_track\n");
+    sprintf(uart_tx_buffer, "Commands:\nhelp\nget_time\nset_time <hh> <mm> <ss>\nget_daylight_time\nget_track\n");
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
   } else if (!strcmp(command, "get_time")) {
     RTC_TimeTypeDef time;
@@ -474,6 +547,12 @@ void process_uart_command(UART_HandleTypeDef *huart) {
     }
     sprintf(uart_tx_buffer, "Time set to %02d:%02d:%02d\n", hours, minutes, seconds);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+  } else if (!strcmp(command, "get_daylight_time")) {
+    const uint32_t seconds = light_duration / 10000;
+    const uint32_t minutes = seconds / 60;
+    const uint32_t hours   = minutes / 60;
+    sprintf(uart_tx_buffer, "Daylight time: %02"PRIu32":%02"PRIu32":%02"PRIu32"\n", hours, minutes % 60, seconds % 60);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
   } else if (!strcmp(command, "get_track")) {
     //TODO: get_track
     sprintf(uart_tx_buffer, "TODO: %s\n", command);
@@ -481,6 +560,24 @@ void process_uart_command(UART_HandleTypeDef *huart) {
   } else {
     sprintf(uart_tx_buffer, "Error: unknown command: %s\n", command);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+  }
+}
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+  if (htim->Instance != TIM2) {
+    return;
+  }
+
+  switch (htim->Channel) {
+  case HAL_TIM_ACTIVE_CHANNEL_1:
+    htim->Instance->CNT = 0;
+    break;
+  case HAL_TIM_ACTIVE_CHANNEL_2:
+    light_duration = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
+    //TODO: EEPROM
+    break;
+  default:
+    break;
   }
 }
 /* USER CODE END 4 */
