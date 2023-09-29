@@ -11,7 +11,7 @@ static void led_display(uint8_t number);
 
 typedef struct led_state_t {
   enum {
-    LED_DISPLAY_HH_MM = 0,
+    LED_DISPLAY_HH_MM,
     LED_DISPLAY_MM_SS,
   } led_display_mode;
   uint8_t selected_led;

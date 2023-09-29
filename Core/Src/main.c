@@ -24,7 +24,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include "led.h"
+#include "button.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -69,7 +71,7 @@ static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 static void process_uart_command(UART_HandleTypeDef *huart);
 static void GPIO_EXTI_LIGHT_SENSOR_D0();
-static void GPIO_EXTI_BUTTON_TOGGLE_DISPLAY();
+static void BUTTON_TOGGLE_DISPLAY_Callback(button_state_t old, button_state_t new);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -139,11 +141,21 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  button_t BUTTON_TOGGLE_DISPLAY = create_button(
+      HAL_GPIO_ReadPin(BUTTON_TOGGLE_DISPLAY_GPIO_Port, BUTTON_TOGGLE_DISPLAY_Pin),
+      HAL_GetTick(),
+      &BUTTON_TOGGLE_DISPLAY_Callback
+  );
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    update_button(&BUTTON_TOGGLE_DISPLAY,
+        HAL_GPIO_ReadPin(BUTTON_TOGGLE_DISPLAY_GPIO_Port, BUTTON_TOGGLE_DISPLAY_Pin),
+        HAL_GetTick());
+
+    HAL_Delay(5);
   }
   /* USER CODE END 3 */
 }
@@ -500,7 +512,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : BUTTON_TOGGLE_DISPLAY_Pin */
   GPIO_InitStruct.Pin = BUTTON_TOGGLE_DISPLAY_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(BUTTON_TOGGLE_DISPLAY_GPIO_Port, &GPIO_InitStruct);
 
@@ -530,9 +542,6 @@ static void MX_GPIO_Init(void)
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -667,9 +676,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   case LIGHT_SENSOR_D0_Pin:
     GPIO_EXTI_LIGHT_SENSOR_D0();
     break;
-  case BUTTON_TOGGLE_DISPLAY_Pin:
-    GPIO_EXTI_BUTTON_TOGGLE_DISPLAY();
-    break;
   default:
     break;
   }
@@ -693,8 +699,10 @@ void GPIO_EXTI_LIGHT_SENSOR_D0() {
   HAL_TIM_Base_Start_IT(&htim6);
 }
 
-void GPIO_EXTI_BUTTON_TOGGLE_DISPLAY() {
-  led_toggle_display_mode();
+void BUTTON_TOGGLE_DISPLAY_Callback(button_state_t old, button_state_t new) {
+  if (old == BUTTON_RESET_REQUESTED && new == BUTTON_RESET) {
+    led_toggle_display_mode();
+  }
 }
 /* USER CODE END 4 */
 
