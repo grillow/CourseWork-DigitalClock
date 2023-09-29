@@ -5,25 +5,11 @@
  *      Author: grillow
  */
 
-#include "led.h"
+#include <clock.h>
 
 static void led_display(uint8_t number);
 
-typedef struct led_state_t {
-  enum {
-    LED_DISPLAY_HH_MM,
-    LED_DISPLAY_MM_SS,
-  } led_display_mode;
-  uint8_t selected_led;
-  uint8_t h1;
-  uint8_t h2;
-  uint8_t m1;
-  uint8_t m2;
-  uint8_t s1;
-  uint8_t s2;
-} led_state_t;
-
-static struct led_state_t led_state = {LED_DISPLAY_HH_MM, 0, 0, 0, 0, 0, 0, 0};
+clock_state_t clock_state = {CLOCK_DISPLAY_MODE_HH_MM, 0};
 
 #define LED_A_RESET HAL_GPIO_WritePin(LED_A_GPIO_Port, LED_A_Pin, GPIO_PIN_RESET);
 #define LED_A_SET   HAL_GPIO_WritePin(LED_A_GPIO_Port, LED_A_Pin, GPIO_PIN_SET);
@@ -49,31 +35,10 @@ static struct led_state_t led_state = {LED_DISPLAY_HH_MM, 0, 0, 0, 0, 0, 0, 0};
 #define LED_KEY_4_RESET HAL_GPIO_WritePin(LED_KEY_4_GPIO_Port, LED_KEY_4_Pin, GPIO_PIN_RESET);
 #define LED_KEY_4_SET   HAL_GPIO_WritePin(LED_KEY_4_GPIO_Port, LED_KEY_4_Pin, GPIO_PIN_SET);
 
-void led_toggle_display_mode()
-{
-  switch (led_state.led_display_mode) {
-  case LED_DISPLAY_HH_MM:
-    led_state.led_display_mode = LED_DISPLAY_MM_SS;
-    break;
-  case LED_DISPLAY_MM_SS:
-    led_state.led_display_mode = LED_DISPLAY_HH_MM;
-    break;
-  }
-}
 
-void led_set_time(uint8_t hours, uint8_t minutes, uint8_t seconds)
+void clock_display(uint8_t hours, uint8_t minutes, uint8_t seconds)
 {
-  led_state.h1 = hours / 10;
-  led_state.h2 = hours % 10;
-  led_state.m1 = minutes / 10;
-  led_state.m2 = minutes % 10;
-  led_state.s1 = seconds / 10;
-  led_state.s2 = seconds % 10;
-}
-
-void led_tick()
-{
-  switch (led_state.selected_led) {
+  switch (clock_state.selected_led) {
   default:
     return;
   case 0:
@@ -81,12 +46,12 @@ void led_tick()
     LED_KEY_2_RESET;
     LED_KEY_3_RESET;
     LED_KEY_4_RESET;
-    switch (led_state.led_display_mode) {
-    case LED_DISPLAY_HH_MM:
-      led_display(led_state.h1);
+    switch (clock_state.display_mode) {
+    case CLOCK_DISPLAY_MODE_HH_MM:
+      led_display(hours / 10);
       break;
-    case LED_DISPLAY_MM_SS:
-      led_display(led_state.m1);
+    case CLOCK_DISPLAY_MODE_MM_SS:
+      led_display(minutes / 10);
       break;
     }
     break;
@@ -95,12 +60,12 @@ void led_tick()
     LED_KEY_2_SET;
     LED_KEY_3_RESET;
     LED_KEY_4_RESET;
-    switch (led_state.led_display_mode) {
-    case LED_DISPLAY_HH_MM:
-      led_display(led_state.h2);
+    switch (clock_state.display_mode) {
+    case CLOCK_DISPLAY_MODE_HH_MM:
+      led_display(hours % 10);
       break;
-    case LED_DISPLAY_MM_SS:
-      led_display(led_state.m2);
+    case CLOCK_DISPLAY_MODE_MM_SS:
+      led_display(minutes % 10);
       break;
     }
     break;
@@ -109,12 +74,12 @@ void led_tick()
     LED_KEY_2_RESET;
     LED_KEY_3_SET;
     LED_KEY_4_RESET;
-    switch (led_state.led_display_mode) {
-    case LED_DISPLAY_HH_MM:
-      led_display(led_state.m1);
+    switch (clock_state.display_mode) {
+    case CLOCK_DISPLAY_MODE_HH_MM:
+      led_display(minutes / 10);
       break;
-    case LED_DISPLAY_MM_SS:
-      led_display(led_state.s1);
+    case CLOCK_DISPLAY_MODE_MM_SS:
+      led_display(seconds / 10);
       break;
     }
     break;
@@ -123,18 +88,18 @@ void led_tick()
     LED_KEY_2_RESET;
     LED_KEY_3_RESET;
     LED_KEY_4_SET;
-    switch (led_state.led_display_mode) {
-    case LED_DISPLAY_HH_MM:
-      led_display(led_state.m2);
+    switch (clock_state.display_mode) {
+    case CLOCK_DISPLAY_MODE_HH_MM:
+      led_display(minutes % 10);
       break;
-    case LED_DISPLAY_MM_SS:
-      led_display(led_state.s2);
+    case CLOCK_DISPLAY_MODE_MM_SS:
+      led_display(seconds % 10);
       break;
     }
     break;
   }
-  if (++led_state.selected_led > 3) {
-    led_state.selected_led = 0;
+  if (++clock_state.selected_led > 3) {
+    clock_state.selected_led = 0;
   }
 }
 

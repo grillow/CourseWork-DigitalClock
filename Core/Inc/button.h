@@ -22,10 +22,12 @@ typedef enum {
 typedef struct {
   button_state_t button_state;
   uint32_t state_changed_tick;
+  uint32_t bouncing_time;
   void (*callback)(button_state_t old, button_state_t new);
 } button_t;
 
-button_t create_button(GPIO_PinState pin, uint32_t pressed_tick, void (*callback)(button_state_t, button_state_t));
+button_t create_button(GPIO_PinState pin, uint32_t current_time, uint32_t bouncing_time,
+    void (*callback)(button_state_t, button_state_t));
 void update_button(button_t *button, GPIO_PinState pin, uint32_t current_tick);
 
 #endif /* INC_BUTTON_H_ */

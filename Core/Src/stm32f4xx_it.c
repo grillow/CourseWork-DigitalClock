@@ -18,11 +18,11 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
+#include <clock.h>
 #include "main.h"
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "led.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -237,8 +237,7 @@ void TIM3_IRQHandler(void)
     return;
   }
 
-  led_set_time(time.Hours, time.Minutes, time.Seconds);
-  led_tick();
+  clock_display(time.Hours, time.Minutes, time.Seconds);
   /* USER CODE END TIM3_IRQn 1 */
 }
 

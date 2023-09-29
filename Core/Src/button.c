@@ -7,9 +7,8 @@
 
 #include "button.h"
 
-#define BUTTON_BOUNCING_TIME_MS 100
-
-button_t create_button(GPIO_PinState pin, uint32_t current_tick, void (*callback)(button_state_t, button_state_t)) {
+button_t create_button(GPIO_PinState pin, uint32_t current_tick, uint32_t bouncing_time,
+    void (*callback)(button_state_t, button_state_t)) {
   button_t button;
 
   switch (pin) {
@@ -21,6 +20,7 @@ button_t create_button(GPIO_PinState pin, uint32_t current_tick, void (*callback
     break;
   }
   button.state_changed_tick = current_tick;
+  button.bouncing_time = bouncing_time;
   button.callback = callback;
 
   return button;
@@ -43,7 +43,7 @@ void update_button(button_t *button, GPIO_PinState pin, uint32_t current_tick) {
   case BUTTON_RESET_REQUESTED:
     switch (pin) {
       case GPIO_PIN_RESET:
-        if (current_tick - button->state_changed_tick > BUTTON_BOUNCING_TIME_MS) {
+        if (current_tick - button->state_changed_tick > button->bouncing_time) {
           button->button_state = BUTTON_RESET;
           button->state_changed_tick = current_tick;
           button->callback(BUTTON_RESET_REQUESTED, button->button_state);
@@ -76,7 +76,7 @@ void update_button(button_t *button, GPIO_PinState pin, uint32_t current_tick) {
         // no callback
         break;
       case GPIO_PIN_SET:
-        if (current_tick - button->state_changed_tick > BUTTON_BOUNCING_TIME_MS) {
+        if (current_tick - button->state_changed_tick > button->bouncing_time) {
           button->button_state = BUTTON_SET;
           button->state_changed_tick = current_tick;
           button->callback(BUTTON_SET_REQUESTED, button->button_state);
