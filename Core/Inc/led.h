@@ -10,7 +10,8 @@
 
 #include "main.h"
 
-void led_select(uint8_t key);
-void led_display(uint8_t number);
+void led_toggle_display_mode();
+void led_set_time(uint8_t hours, uint8_t minutes, uint8_t seconds);
+void led_tick();
 
 #endif /* INC_LED_H_ */

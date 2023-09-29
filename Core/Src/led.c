@@ -7,6 +7,24 @@
 
 #include "led.h"
 
+static void led_display(uint8_t number);
+
+typedef struct led_state_t {
+  enum {
+    LED_DISPLAY_HH_MM = 0,
+    LED_DISPLAY_MM_SS,
+  } led_display_mode;
+  uint8_t selected_led;
+  uint8_t h1;
+  uint8_t h2;
+  uint8_t m1;
+  uint8_t m2;
+  uint8_t s1;
+  uint8_t s2;
+} led_state_t;
+
+static struct led_state_t led_state = {LED_DISPLAY_HH_MM, 0, 0, 0, 0, 0, 0, 0};
+
 #define LED_A_RESET HAL_GPIO_WritePin(LED_A_GPIO_Port, LED_A_Pin, GPIO_PIN_RESET);
 #define LED_A_SET   HAL_GPIO_WritePin(LED_A_GPIO_Port, LED_A_Pin, GPIO_PIN_SET);
 #define LED_B_RESET HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_RESET);
@@ -31,38 +49,97 @@
 #define LED_KEY_4_RESET HAL_GPIO_WritePin(LED_KEY_4_GPIO_Port, LED_KEY_4_Pin, GPIO_PIN_RESET);
 #define LED_KEY_4_SET   HAL_GPIO_WritePin(LED_KEY_4_GPIO_Port, LED_KEY_4_Pin, GPIO_PIN_SET);
 
-void led_select(uint8_t key) {
-  switch (key) {
-  default:
-    return;
-  case 1:
-    LED_KEY_1_SET;
-    LED_KEY_2_RESET;
-    LED_KEY_3_RESET;
-    LED_KEY_4_RESET;
+void led_toggle_display_mode()
+{
+  switch (led_state.led_display_mode) {
+  case LED_DISPLAY_HH_MM:
+    led_state.led_display_mode = LED_DISPLAY_MM_SS;
     break;
-  case 2:
-    LED_KEY_1_RESET;
-    LED_KEY_2_SET;
-    LED_KEY_3_RESET;
-    LED_KEY_4_RESET;
-    break;
-  case 3:
-    LED_KEY_1_RESET;
-    LED_KEY_2_RESET;
-    LED_KEY_3_SET;
-    LED_KEY_4_RESET;
-    break;
-  case 4:
-    LED_KEY_1_RESET;
-    LED_KEY_2_RESET;
-    LED_KEY_3_RESET;
-    LED_KEY_4_SET;
+  case LED_DISPLAY_MM_SS:
+    led_state.led_display_mode = LED_DISPLAY_HH_MM;
     break;
   }
 }
 
-void led_display(uint8_t number) {
+void led_set_time(uint8_t hours, uint8_t minutes, uint8_t seconds)
+{
+  led_state.h1 = hours / 10;
+  led_state.h2 = hours % 10;
+  led_state.m1 = minutes / 10;
+  led_state.m2 = minutes % 10;
+  led_state.s1 = seconds / 10;
+  led_state.s2 = seconds % 10;
+}
+
+void led_tick()
+{
+  switch (led_state.selected_led) {
+  default:
+    return;
+  case 0:
+    LED_KEY_1_SET;
+    LED_KEY_2_RESET;
+    LED_KEY_3_RESET;
+    LED_KEY_4_RESET;
+    switch (led_state.led_display_mode) {
+    case LED_DISPLAY_HH_MM:
+      led_display(led_state.h1);
+      break;
+    case LED_DISPLAY_MM_SS:
+      led_display(led_state.m1);
+      break;
+    }
+    break;
+  case 1:
+    LED_KEY_1_RESET;
+    LED_KEY_2_SET;
+    LED_KEY_3_RESET;
+    LED_KEY_4_RESET;
+    switch (led_state.led_display_mode) {
+    case LED_DISPLAY_HH_MM:
+      led_display(led_state.h2);
+      break;
+    case LED_DISPLAY_MM_SS:
+      led_display(led_state.m2);
+      break;
+    }
+    break;
+  case 2:
+    LED_KEY_1_RESET;
+    LED_KEY_2_RESET;
+    LED_KEY_3_SET;
+    LED_KEY_4_RESET;
+    switch (led_state.led_display_mode) {
+    case LED_DISPLAY_HH_MM:
+      led_display(led_state.m1);
+      break;
+    case LED_DISPLAY_MM_SS:
+      led_display(led_state.s1);
+      break;
+    }
+    break;
+  case 3:
+    LED_KEY_1_RESET;
+    LED_KEY_2_RESET;
+    LED_KEY_3_RESET;
+    LED_KEY_4_SET;
+    switch (led_state.led_display_mode) {
+    case LED_DISPLAY_HH_MM:
+      led_display(led_state.m2);
+      break;
+    case LED_DISPLAY_MM_SS:
+      led_display(led_state.s2);
+      break;
+    }
+    break;
+  }
+  if (++led_state.selected_led > 3) {
+    led_state.selected_led = 0;
+  }
+}
+
+void led_display(uint8_t number)
+{
   number %= 10;
 
   switch (number) {

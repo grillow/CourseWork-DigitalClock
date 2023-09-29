@@ -221,6 +221,20 @@ void EXTI0_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles EXTI line 4 interrupt.
+  */
+void EXTI4_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI4_IRQn 0 */
+
+  /* USER CODE END EXTI4_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(BUTTON_TOGGLE_DISPLAY_Pin);
+  /* USER CODE BEGIN EXTI4_IRQn 1 */
+
+  /* USER CODE END EXTI4_IRQn 1 */
+}
+
+/**
   * @brief This function handles TIM3 global interrupt.
   */
 void TIM3_IRQHandler(void)
@@ -230,8 +244,6 @@ void TIM3_IRQHandler(void)
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
-  static uint8_t selected_led = 1;
-
   RTC_TimeTypeDef time;
   RTC_DateTypeDef date;   // it won't work without reading date
   if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
@@ -239,26 +251,8 @@ void TIM3_IRQHandler(void)
     return;
   }
 
-  led_select(selected_led);
-
-  switch (selected_led) {
-  case 1:
-    led_display(time.Hours / 10);
-    break;
-  case 2:
-    led_display(time.Hours % 10);
-    break;
-  case 3:
-    led_display(time.Minutes / 10);
-    break;
-  case 4:
-    led_display(time.Minutes % 10);
-    break;
-  }
-
-  if (++selected_led > 4) {
-    selected_led = 1;
-  }
+  led_set_time(time.Hours, time.Minutes, time.Seconds);
+  led_tick();
   /* USER CODE END TIM3_IRQn 1 */
 }
 

@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include "led.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,7 +67,9 @@ static void MX_TIM6_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
-void process_uart_command(UART_HandleTypeDef *huart);
+static void process_uart_command(UART_HandleTypeDef *huart);
+static void GPIO_EXTI_LIGHT_SENSOR_D0();
+static void GPIO_EXTI_BUTTON_TOGGLE_DISPLAY();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -495,6 +498,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(LIGHT_SENSOR_D0_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : BUTTON_TOGGLE_DISPLAY_Pin */
+  GPIO_InitStruct.Pin = BUTTON_TOGGLE_DISPLAY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(BUTTON_TOGGLE_DISPLAY_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pins : LD2_Pin LED_KEY_4_Pin */
   GPIO_InitStruct.Pin = LD2_Pin|LED_KEY_4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -521,6 +530,9 @@ static void MX_GPIO_Init(void)
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -651,10 +663,19 @@ void process_uart_command(UART_HandleTypeDef *huart)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  if (GPIO_Pin != LIGHT_SENSOR_D0_Pin) {
-    return;
+  switch (GPIO_Pin) {
+  case LIGHT_SENSOR_D0_Pin:
+    GPIO_EXTI_LIGHT_SENSOR_D0();
+    break;
+  case BUTTON_TOGGLE_DISPLAY_Pin:
+    GPIO_EXTI_BUTTON_TOGGLE_DISPLAY();
+    break;
+  default:
+    break;
   }
+}
 
+void GPIO_EXTI_LIGHT_SENSOR_D0() {
   if (htim6.Instance->CR1 & TIM_CR1_CEN) {
     HAL_TIM_Base_Stop_IT(&htim6);
   }
@@ -670,6 +691,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
   htim6.Instance->CNT = 0;
   HAL_TIM_Base_Start_IT(&htim6);
+}
+
+void GPIO_EXTI_BUTTON_TOGGLE_DISPLAY() {
+  led_toggle_display_mode();
 }
 /* USER CODE END 4 */
 
