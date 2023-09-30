@@ -503,11 +503,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(LIGHT_SENSOR_D0_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : BUTTON_TOGGLE_DISPLAY_Pin */
-  GPIO_InitStruct.Pin = BUTTON_TOGGLE_DISPLAY_Pin;
+  /*Configure GPIO pins : BUTTON_TOGGLE_STOPWATCH_Pin BUTTON_TOGGLE_DISPLAY_Pin BUTTON_INCREASE_Pin BUTTON_DECREASE_Pin */
+  GPIO_InitStruct.Pin = BUTTON_TOGGLE_STOPWATCH_Pin|BUTTON_TOGGLE_DISPLAY_Pin|BUTTON_INCREASE_Pin|BUTTON_DECREASE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(BUTTON_TOGGLE_DISPLAY_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD2_Pin LED_KEY_4_Pin */
   GPIO_InitStruct.Pin = LD2_Pin|LED_KEY_4_Pin;
@@ -515,6 +515,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : BUTTON_TOGGLE_SET_TIME_Pin */
+  GPIO_InitStruct.Pin = BUTTON_TOGGLE_SET_TIME_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(BUTTON_TOGGLE_SET_TIME_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LED_E_Pin LED_D_Pin LED_C_Pin */
   GPIO_InitStruct.Pin = LED_E_Pin|LED_D_Pin|LED_C_Pin;
