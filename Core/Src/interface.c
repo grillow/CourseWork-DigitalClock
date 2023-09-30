@@ -185,10 +185,13 @@ void BUTTON_TOGGLE_DISPLAY_Callback(button_state_t old, button_state_t new)
   case INTERFACE_STOPWATCH_MODE:
     switch (interface.led_display_stopwatch_mode) {
     case LED_DISPLAY_MODE_HH_MM:
-      interface.led_display_stopwatch_mode = LED_DISPLAY_MODE_MM_SS;
+      interface.led_display_stopwatch_mode = LED_DISPLAY_MODE_SS_CS;
       break;
     case LED_DISPLAY_MODE_MM_SS:
       interface.led_display_stopwatch_mode = LED_DISPLAY_MODE_HH_MM;
+      break;
+    case LED_DISPLAY_MODE_SS_CS:
+      interface.led_display_stopwatch_mode = LED_DISPLAY_MODE_MM_SS;
       break;
     default:
       // unreachable
@@ -227,6 +230,7 @@ void BUTTON_TOGGLE_STOPWATCH_Callback(button_state_t old, button_state_t new)
     case INTERFACE_STOPWATCH_IDLE:
       HAL_TIM_Base_Start(&htim5);
       interface.stopwatch_mode.mode = INTERFACE_STOPWATCH_RUNNING;
+      interface.led_display_stopwatch_mode = LED_DISPLAY_MODE_SS_CS;
       break;
     case INTERFACE_STOPWATCH_RUNNING:
       interface.stopwatch_mode.mode = INTERFACE_STOPWATCH_STOPPED;
