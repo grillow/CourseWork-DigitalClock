@@ -229,7 +229,7 @@ void TIM3_IRQHandler(void)
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
-  interface_update_led();
+  interface_update_clock();
   /* USER CODE END TIM3_IRQn 1 */
 }
 

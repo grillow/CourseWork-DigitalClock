@@ -22,7 +22,17 @@ typedef enum {
   LED_DISPLAY_MODE_MM_SS,
   LED_DISPLAY_MODE_HH,
   LED_DISPLAY_MODE_MM,
+  LED_DISPLAY_MODE_SS_CS, // seconds, centiseconds
 } led_display_mode_t;
+
+typedef struct {
+  enum {
+    INTERFACE_STOPWATCH_IDLE,
+    INTERFACE_STOPWATCH_RUNNING,
+    INTERFACE_STOPWATCH_STOPPED,
+  } mode;
+  uint32_t track;
+} interface_stopwatch_mode_t;
 
 typedef struct {
   uint32_t hours;
@@ -31,11 +41,12 @@ typedef struct {
 } interface_set_time_mode_t;
 
 typedef struct {
-  interface_mode_t interface_mode;
+  interface_mode_t mode;
   led_display_mode_t led_display_default_mode;
   led_display_mode_t led_display_stopwatch_mode;
   led_display_mode_t led_display_set_time_mode;
-  interface_set_time_mode_t interface_set_time_mode;
+  interface_stopwatch_mode_t stopwatch_mode;
+  interface_set_time_mode_t set_time_mode;
   button_t BUTTON_TOGGLE_DISPLAY;
   button_t BUTTON_TOGGLE_STOPWATCH;
   button_t BUTTON_TOGGLE_SET_TIME;
@@ -47,6 +58,6 @@ extern interface_t interface;
 
 void init_interface();
 void interface_update_buttons();
-void interface_update_led();
+void interface_update_clock();
 
 #endif /* INC_INTERFACE_H_ */
