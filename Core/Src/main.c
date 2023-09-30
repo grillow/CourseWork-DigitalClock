@@ -17,7 +17,6 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <clock.h>
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -25,8 +24,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <led.h>
 #include <stdbool.h>
-#include "button.h"
+#include "interface.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -71,7 +71,6 @@ static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 static void process_uart_command(UART_HandleTypeDef *huart);
 static void GPIO_EXTI_LIGHT_SENSOR_D0();
-static void BUTTON_TOGGLE_DISPLAY_Callback(button_state_t old, button_state_t new);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -141,20 +140,13 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  button_t BUTTON_TOGGLE_DISPLAY = create_button(
-      HAL_GPIO_ReadPin(BUTTON_TOGGLE_DISPLAY_GPIO_Port, BUTTON_TOGGLE_DISPLAY_Pin),
-      HAL_GetTick(),
-      BUTTON_BOUNCING_TIME_MS,
-      &BUTTON_TOGGLE_DISPLAY_Callback
-  );
+  init_interface();
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    update_button(&BUTTON_TOGGLE_DISPLAY,
-        HAL_GPIO_ReadPin(BUTTON_TOGGLE_DISPLAY_GPIO_Port, BUTTON_TOGGLE_DISPLAY_Pin),
-        HAL_GetTick());
+    interface_update_buttons();
 
     HAL_Delay(5);
   }
@@ -698,19 +690,6 @@ void GPIO_EXTI_LIGHT_SENSOR_D0() {
 
   htim6.Instance->CNT = 0;
   HAL_TIM_Base_Start_IT(&htim6);
-}
-
-void BUTTON_TOGGLE_DISPLAY_Callback(button_state_t old, button_state_t new) {
-  if (old == BUTTON_RESET_REQUESTED && new == BUTTON_RESET) {
-    switch (clock_state.display_mode) {
-    case CLOCK_DISPLAY_MODE_HH_MM:
-      clock_state.display_mode = CLOCK_DISPLAY_MODE_MM_SS;
-      break;
-    case CLOCK_DISPLAY_MODE_MM_SS:
-      clock_state.display_mode = CLOCK_DISPLAY_MODE_HH_MM;
-      break;
-    }
-  }
 }
 /* USER CODE END 4 */
 

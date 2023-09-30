@@ -7,7 +7,7 @@
 
 #include "button.h"
 
-button_t create_button(GPIO_PinState pin, uint32_t current_tick, uint32_t bouncing_time,
+button_t button_create(GPIO_PinState pin, uint32_t current_tick, uint32_t bouncing_time,
     void (*callback)(button_state_t, button_state_t)) {
   button_t button;
 
@@ -26,7 +26,7 @@ button_t create_button(GPIO_PinState pin, uint32_t current_tick, uint32_t bounci
   return button;
 }
 
-void update_button(button_t *button, GPIO_PinState pin, uint32_t current_tick) {
+void button_update(button_t *button, GPIO_PinState pin, uint32_t current_tick) {
   switch (button->button_state) {
   case BUTTON_SET:
     switch (pin) {

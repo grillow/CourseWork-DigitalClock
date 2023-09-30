@@ -18,11 +18,12 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
-#include <clock.h>
+#include <led.h>
 #include "main.h"
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "interface.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,7 +62,6 @@ extern TIM_HandleTypeDef htim6;
 extern UART_HandleTypeDef huart2;
 /* USER CODE BEGIN EV */
 extern I2C_HandleTypeDef hi2c1;
-extern RTC_HandleTypeDef hrtc;
 extern TIM_HandleTypeDef htim2;
 
 extern int light_sensor_state;
@@ -230,14 +230,7 @@ void TIM3_IRQHandler(void)
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
-  RTC_TimeTypeDef time;
-  RTC_DateTypeDef date;   // it won't work without reading date
-  if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
-      HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
-    return;
-  }
-
-  clock_display(time.Hours, time.Minutes, time.Seconds);
+  interface_update_led();
   /* USER CODE END TIM3_IRQn 1 */
 }
 
