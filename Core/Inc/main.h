@@ -48,6 +48,9 @@ extern "C" {
 /* USER CODE BEGIN EM */
 #define EEPROM_I2C_ADDRESS (0b1010000 << 1)
 #define EEPROM_DATA_ADDRESS 0x0000
+#define INTERFACE_BUTTON_BOUNCING_TIME_MS 25
+#define SOUND_SENSOR_THRESHOLD 1023
+#define SOUND_SENSOR_BOUNCING_TIME_MS 2000
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

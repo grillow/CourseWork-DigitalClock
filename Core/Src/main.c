@@ -45,12 +45,15 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
 I2C_HandleTypeDef hi2c1;
 
 RTC_HandleTypeDef hrtc;
 
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim5;
 TIM_HandleTypeDef htim6;
 
@@ -70,9 +73,12 @@ static void MX_TIM6_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM5_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 static void process_uart_command(UART_HandleTypeDef *huart);
 static void GPIO_EXTI_LIGHT_SENSOR_D0();
+static void SOUND_SENSOR_Callback(button_state_t old, button_state_t new);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -86,6 +92,12 @@ char uart_tx_buffer[256];
 // -1 - low, 0 - no change, 1 - high
 int light_sensor_state = 0;
 int light_sensor_state_requested = 0;
+
+bool track_enabled = false;
+uint32_t track_acc = 0;
+uint32_t track_duration = 0;
+button_t sound_sensor;
+
 /* USER CODE END 0 */
 
 /**
@@ -123,6 +135,8 @@ int main(void)
   MX_TIM2_Init();
   MX_I2C1_Init();
   MX_TIM5_Init();
+  MX_ADC1_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   if (HAL_TIM_Base_Start_IT(&htim3) != HAL_OK) {
     Error_Handler();
@@ -139,17 +153,32 @@ int main(void)
   } else {
     light_sensor_state = 1;
   }
+  if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
+    Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   init_interface();
+
+//  HAL_ADC_Start(&hadc1);
+//  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+//  const uint32_t value = HAL_ADC_GetValue(&hadc1);
+  sound_sensor = button_create(
+//      value <= SOUND_SENSOR_THRESHOLD ? SET : RESET,
+      RESET,
+      HAL_GetTick(),
+      SOUND_SENSOR_BOUNCING_TIME_MS,
+      &SOUND_SENSOR_Callback
+  );
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     interface_update_buttons();
+    HAL_ADC_Start_IT(&hadc1);
 
     HAL_Delay(5);
   }
@@ -202,6 +231,58 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_8;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -393,6 +474,51 @@ static void MX_TIM3_Init(void)
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 8399;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 10000;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+
+  /* USER CODE END TIM4_Init 2 */
 
 }
 
@@ -639,7 +765,7 @@ void process_uart_command(UART_HandleTypeDef *huart)
   }
 
   if (!strcmp(command, "help")) {
-    sprintf(uart_tx_buffer, "Commands:\nhelp\nget_time\nset_time <hh> <mm> <ss>\nget_daylight_time\nget_track\n");
+    sprintf(uart_tx_buffer, "Commands:\nhelp\nget_time\nset_time <hh> <mm> <ss>\nget_daylight_time\ntrack_enable\ntrack_disable\nget_track\n");
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
   } else if (!strcmp(command, "get_time")) {
     RTC_TimeTypeDef time;
@@ -707,8 +833,8 @@ void process_uart_command(UART_HandleTypeDef *huart)
     const uint32_t hours   = minutes / 60;
     sprintf(uart_tx_buffer, "Daylight time: %02"PRIu32":%02"PRIu32":%02"PRIu32"\n", hours, minutes % 60, seconds % 60);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
-  } else if (!strcmp(command, "get_track")) {
-    const uint32_t total_centiseconds = interface.stopwatch_mode.track / 100;
+  } else if (!strcmp(command, "get_stopwatch")) {
+    const uint32_t total_centiseconds = interface.stopwatch_mode.stopwatch / 100;
     const uint32_t total_seconds      = total_centiseconds / 100;
     const uint32_t total_minutes      = total_seconds / 60;
     const uint32_t total_hours        = total_minutes / 60;
@@ -717,8 +843,28 @@ void process_uart_command(UART_HandleTypeDef *huart)
     const uint32_t seconds            = total_seconds % 60;
     const uint32_t minutes            = total_minutes % 60;
     const uint32_t hours              = total_hours;
-    sprintf(uart_tx_buffer, "Last track: %02"PRIu32":%02"PRIu32":%02"PRIu32".%02"PRIu32"\n", hours, minutes, seconds, centiseconds);
+    sprintf(uart_tx_buffer, "Last stopwatch: %02"PRIu32":%02"PRIu32":%02"PRIu32".%02"PRIu32"\n", hours, minutes, seconds, centiseconds);
 	  HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+  } else if (!strcmp(command, "track_enable")) {
+    track_enabled = true;
+    sprintf(uart_tx_buffer, "Track sampling enabled\n");
+    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+  } else if (!strcmp(command, "track_disable")) {
+    track_enabled = false;
+    sprintf(uart_tx_buffer, "Track sampling disabled\n");
+    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+  } else if (!strcmp(command, "get_track")) {
+    const uint32_t total_centiseconds = track_duration / 100;
+    const uint32_t total_seconds      = total_centiseconds / 100;
+    const uint32_t total_minutes      = total_seconds / 60;
+    const uint32_t total_hours        = total_minutes / 60;
+
+    const uint32_t centiseconds       = total_centiseconds % 100;
+    const uint32_t seconds            = total_seconds % 60;
+    const uint32_t minutes            = total_minutes % 60;
+    const uint32_t hours              = total_hours;
+    sprintf(uart_tx_buffer, "Track duration: %02"PRIu32":%02"PRIu32":%02"PRIu32".%02"PRIu32"\n", hours, minutes, seconds, centiseconds);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
   } else {
     sprintf(uart_tx_buffer, "Error: unknown command: %s\n", command);
     HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
@@ -736,7 +882,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   }
 }
 
-void GPIO_EXTI_LIGHT_SENSOR_D0() {
+void GPIO_EXTI_LIGHT_SENSOR_D0()
+{
   if (htim6.Instance->CR1 & TIM_CR1_CEN) {
     HAL_TIM_Base_Stop_IT(&htim6);
   }
@@ -752,6 +899,32 @@ void GPIO_EXTI_LIGHT_SENSOR_D0() {
 
   htim6.Instance->CNT = 0;
   HAL_TIM_Base_Start_IT(&htim6);
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+  if (hadc->Instance != ADC1) {
+    return;
+  }
+
+  button_update(&sound_sensor,
+      HAL_ADC_GetValue(hadc) <= SOUND_SENSOR_THRESHOLD ? RESET : SET,
+      HAL_GetTick());
+}
+
+void SOUND_SENSOR_Callback(button_state_t old, button_state_t new)
+{
+  if (old == BUTTON_RESET_REQUESTED && new == BUTTON_RESET) {
+    HAL_TIM_Base_Stop_IT(&htim4);
+    track_acc += htim4.Instance->CNT;
+    track_duration = track_acc;
+  } else if (old == BUTTON_SET_REQUESTED && new == BUTTON_SET) {
+    if (track_enabled) {
+      track_acc = 0;
+      htim4.Instance->CNT = 0;
+      HAL_TIM_Base_Start_IT(&htim4);
+    }
+  }
 }
 /* USER CODE END 4 */
 

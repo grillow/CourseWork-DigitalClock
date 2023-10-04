@@ -12,7 +12,7 @@ interface_t interface;
 extern RTC_HandleTypeDef hrtc;
 extern TIM_HandleTypeDef htim5;
 
-#define BUTTON_BOUNCING_TIME_MS 25
+#define INTERFACE_BUTTON_BOUNCING_TIME_MS 25
 
 static void update_led();
 static void led_set_time(led_display_mode_t display_mode, uint32_t hours, uint32_t minutes, uint32_t seconds, uint32_t centiseconds);
@@ -30,37 +30,37 @@ void init_interface()
   interface.led_display_default_mode = LED_DISPLAY_MODE_HH_MM;
   interface.led_display_stopwatch_mode = LED_DISPLAY_MODE_SS_CS;
   interface.stopwatch_mode.mode = INTERFACE_STOPWATCH_STOPPED;
-  interface.stopwatch_mode.track = 0; //TODO: load?
+  interface.stopwatch_mode.stopwatch = 0; //TODO: load?
   interface.led_display_set_time_mode = LED_DISPLAY_MODE_HH;
 
   interface.BUTTON_TOGGLE_DISPLAY = button_create(
         HAL_GPIO_ReadPin(BUTTON_TOGGLE_DISPLAY_GPIO_Port, BUTTON_TOGGLE_DISPLAY_Pin),
         HAL_GetTick(),
-        BUTTON_BOUNCING_TIME_MS,
+        INTERFACE_BUTTON_BOUNCING_TIME_MS,
         &BUTTON_TOGGLE_DISPLAY_Callback
     );
   interface.BUTTON_TOGGLE_STOPWATCH = button_create(
       HAL_GPIO_ReadPin(BUTTON_TOGGLE_STOPWATCH_GPIO_Port, BUTTON_TOGGLE_STOPWATCH_Pin),
       HAL_GetTick(),
-      BUTTON_BOUNCING_TIME_MS,
+      INTERFACE_BUTTON_BOUNCING_TIME_MS,
       &BUTTON_TOGGLE_STOPWATCH_Callback
   );
   interface.BUTTON_TOGGLE_SET_TIME = button_create(
       HAL_GPIO_ReadPin(BUTTON_TOGGLE_SET_TIME_GPIO_Port, BUTTON_TOGGLE_SET_TIME_Pin),
       HAL_GetTick(),
-      BUTTON_BOUNCING_TIME_MS,
+      INTERFACE_BUTTON_BOUNCING_TIME_MS,
       &BUTTON_TOGGLE_SET_TIME_Callback
   );
   interface.BUTTON_DECREASE = button_create(
       HAL_GPIO_ReadPin(BUTTON_DECREASE_GPIO_Port, BUTTON_DECREASE_Pin),
       HAL_GetTick(),
-      BUTTON_BOUNCING_TIME_MS,
+      INTERFACE_BUTTON_BOUNCING_TIME_MS,
       &BUTTON_DECREASE_Callback
   );
   interface.BUTTON_INCREASE = button_create(
       HAL_GPIO_ReadPin(BUTTON_INCREASE_GPIO_Port, BUTTON_INCREASE_Pin),
       HAL_GetTick(),
-      BUTTON_BOUNCING_TIME_MS,
+      INTERFACE_BUTTON_BOUNCING_TIME_MS,
       &BUTTON_INCREASE_Callback
   );
 }
@@ -238,7 +238,7 @@ void BUTTON_TOGGLE_STOPWATCH_Callback(button_state_t old, button_state_t new)
       break;
     case INTERFACE_STOPWATCH_STOPPED:
       interface.mode = INTERFACE_DEFAULT_MODE;
-      interface.stopwatch_mode.track = htim5.Instance->CNT;
+      interface.stopwatch_mode.stopwatch = htim5.Instance->CNT;
       htim5.Instance->CNT = 0;
       break;
     }

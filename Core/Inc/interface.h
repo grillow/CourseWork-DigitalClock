@@ -31,7 +31,7 @@ typedef struct {
     INTERFACE_STOPWATCH_RUNNING,
     INTERFACE_STOPWATCH_STOPPED,
   } mode;
-  uint32_t track;
+  uint32_t stopwatch;
 } interface_stopwatch_mode_t;
 
 typedef struct {
