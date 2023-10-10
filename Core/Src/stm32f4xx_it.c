@@ -60,6 +60,7 @@ extern ADC_HandleTypeDef hadc1;
 extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim4;
 extern TIM_HandleTypeDef htim6;
+extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 /* USER CODE BEGIN EV */
 extern I2C_HandleTypeDef hi2c1;
@@ -266,6 +267,20 @@ void TIM4_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles USART1 global interrupt.
+  */
+void USART1_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART1_IRQn 0 */
+
+  /* USER CODE END USART1_IRQn 0 */
+  HAL_UART_IRQHandler(&huart1);
+  /* USER CODE BEGIN USART1_IRQn 1 */
+
+  /* USER CODE END USART1_IRQn 1 */
+}
+
+/**
   * @brief This function handles USART2 global interrupt.
   */
 void USART2_IRQHandler(void)
@@ -302,7 +317,7 @@ void TIM6_DAC_IRQHandler(void)
       const uint32_t light_duration = htim2.Instance->CNT;
       HAL_TIM_Base_Stop(&htim2);
       if (HAL_I2C_Mem_Write(&hi2c1, EEPROM_I2C_ADDRESS, EEPROM_DATA_ADDRESS, 2, (uint8_t*)&light_duration, sizeof(light_duration), HAL_MAX_DELAY) != HAL_OK) {
-        //TODO: oy vey (HAL_BUSY)
+        //oy vey (HAL_BUSY)
       }
     }
   }

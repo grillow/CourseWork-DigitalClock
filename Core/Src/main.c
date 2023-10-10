@@ -31,7 +31,30 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef struct {
+  bool rx_buffer_overflow;
+  char rx_buffer[1];
+} uart_state;
 
+typedef enum {
+  WIFI_STATE_INITIAL,
+  WIFI_STATE_ATE_WAITING,
+  WIFI_STATE_CWMODE_WAITING,
+  WIFI_STATE_CIPMODE_WAITING,
+  WIFI_STATE_CIPMUX_WAITING,
+  WIFI_STATE_WAITING_WIFI_CREDENTIALS,
+  WIFI_STATE_CWJAP_WAITING,
+  WIFI_STATE_CIPSERVER_WAITING,
+  WIFI_STATE_OPERATING,
+} wifi_state_t;
+
+typedef enum {
+  TCP_SERVER_STATE_IDLE,
+  TCP_SERVER_STATE_READING_CLIENT_ID,
+  TCP_SERVER_STATE_READING_DATA_LENGTH,
+  TCP_SERVER_STATE_READING_DATA,
+  TCP_SERVER_STATE_SENDING_DATA,
+} tcp_server_state_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -57,6 +80,7 @@ TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim5;
 TIM_HandleTypeDef htim6;
 
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -75,19 +99,35 @@ static void MX_I2C1_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 static void process_uart_command(UART_HandleTypeDef *huart);
+static void wifi_init(UART_HandleTypeDef *huart);
+static void wifi_process_tcp_data(UART_HandleTypeDef *huart, uint32_t client, uint32_t data_length);
 static void GPIO_EXTI_LIGHT_SENSOR_D0();
 static void SOUND_SENSOR_Callback(button_state_t old, button_state_t new);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-int uart_rx_buffer_overflow = 0;
-char uart_rx_buffer[1];
-char command_buffer[32] = {0};
+uart_state command_uart = {false, {0}};
+char command_buffer[256] = {0};
 size_t command_buffer_index = 0;
-char uart_tx_buffer[256];
+char command_tx_buffer[512];
+
+uart_state wifi_uart = {false, {0}};
+char wifi_response[1024] = {0};
+size_t wifi_response_index = 0;
+char wifi_tx_buffer[2048];
+wifi_state_t wifi_state = WIFI_STATE_INITIAL;
+tcp_server_state_t tcp_server_state = TCP_SERVER_STATE_IDLE;
+uint32_t tcp_server_client_id = 0;
+uint32_t tcp_server_to_receive = 0;
+uint32_t tcp_server_received = 0;
+char tcp_response[2048] = {0};
+uint32_t tcp_response_length = 0;
+char ssid[64] = {0};
+char password[64] = {0};
 
 // -1 - low, 0 - no change, 1 - high
 int light_sensor_state = 0;
@@ -137,11 +177,12 @@ int main(void)
   MX_TIM5_Init();
   MX_ADC1_Init();
   MX_TIM4_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   if (HAL_TIM_Base_Start_IT(&htim3) != HAL_OK) {
     Error_Handler();
   }
-  if (HAL_UART_Receive_IT(&huart2, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer)) != HAL_OK) {
+  if (HAL_UART_Receive_IT(&huart2, (uint8_t*)command_uart.rx_buffer, sizeof(command_uart.rx_buffer)) != HAL_OK) {
     Error_Handler();
   }
   HAL_Delay(1000);
@@ -161,6 +202,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   init_interface();
+  wifi_init(&huart1);
 
 //  HAL_ADC_Start(&hadc1);
 //  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
@@ -606,6 +648,39 @@ static void MX_TIM6_Init(void)
 }
 
 /**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -723,35 +798,164 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  if (huart->Instance != USART2) {
-    return;
-  }
+  if (huart->Instance == USART1) {
+    const char received_byte = wifi_uart.rx_buffer[0];
 
-  const char received_byte = uart_rx_buffer[0];
-  switch (received_byte) {
-  default:
-    if (command_buffer_index >= sizeof(command_buffer)) {
-      if (!uart_rx_buffer_overflow) {
-        uart_rx_buffer_overflow = 1;
-        sprintf(uart_tx_buffer, "Error: command shouldn't be longer than %d\n", sizeof(command_buffer));
-          HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    wifi_response[wifi_response_index++] = received_byte;
+    if (wifi_response_index >= sizeof(wifi_response)) {
+      if (!wifi_uart.rx_buffer_overflow) {
+        wifi_uart.rx_buffer_overflow = true;
+        wifi_response_index = 0;
+        memset(wifi_response, 0, sizeof(wifi_response));
+      }
+    }
+
+    switch (wifi_state) {
+    case WIFI_STATE_INITIAL: break;
+    case WIFI_STATE_ATE_WAITING:
+      if(wifi_response_index >= 6 && !strcmp(wifi_response + wifi_response_index - 6, "ATE0\r\n")) {
+        wifi_state = WIFI_STATE_CWMODE_WAITING;
+        const int len = sprintf(wifi_tx_buffer, "AT+CWMODE=1\r\n");
+        HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
+        wifi_response_index = 0;
+        memset(wifi_response, 0, sizeof(wifi_response));
+      }
+      break;
+    case WIFI_STATE_CWMODE_WAITING:
+      if(wifi_response_index >= 4 && !strcmp(wifi_response + wifi_response_index - 4, "OK\r\n")) {
+        wifi_state = WIFI_STATE_CIPMODE_WAITING;
+        const int len = sprintf(wifi_tx_buffer, "AT+CIPMODE=0\r\n");
+        HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
+        wifi_response_index = 0;
+        memset(wifi_response, 0, sizeof(wifi_response));
+      }
+      break;
+    case WIFI_STATE_CIPMODE_WAITING:
+      if(wifi_response_index >= 4 && !strcmp(wifi_response + wifi_response_index - 4, "OK\r\n")) {
+        wifi_state = WIFI_STATE_CIPMUX_WAITING;
+        const int len = sprintf(wifi_tx_buffer, "AT+CIPMUX=1\r\n");
+        HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
+        wifi_response_index = 0;
+        memset(wifi_response, 0, sizeof(wifi_response));
+      }
+      break;
+    case WIFI_STATE_CIPMUX_WAITING:
+      if(wifi_response_index >= 4 && !strcmp(wifi_response + wifi_response_index - 4, "OK\r\n")) {
+        wifi_state = WIFI_STATE_WAITING_WIFI_CREDENTIALS;
+        wifi_response_index = 0;
+        memset(wifi_response, 0, sizeof(wifi_response));
+
+        sprintf(command_tx_buffer, "Ready to connect to Wi-Fi\n");
+        HAL_UART_Transmit_IT(&huart2, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
+      }
+      break;
+    case WIFI_STATE_WAITING_WIFI_CREDENTIALS: break;
+    case WIFI_STATE_CWJAP_WAITING:
+      if(wifi_response_index >= 4 && !strcmp(wifi_response + wifi_response_index - 4, "OK\r\n")) {
+        wifi_state = WIFI_STATE_CIPSERVER_WAITING;
+        const int len = sprintf(wifi_tx_buffer, "AT+CIPSERVER=1,80\r\n");
+        HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
+        wifi_response_index = 0;
+        memset(wifi_response, 0, sizeof(wifi_response));
+      }
+      break;
+    case WIFI_STATE_CIPSERVER_WAITING:
+      if(wifi_response_index >= 4 && !strcmp(wifi_response + wifi_response_index - 4, "OK\r\n")) {
+        wifi_state = WIFI_STATE_OPERATING;
+        wifi_response_index = 0;
+        memset(wifi_response, 0, sizeof(wifi_response));
+
+        sprintf(command_tx_buffer, "Web-server ready\n");
+        HAL_UART_Transmit_IT(&huart2, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
+      }
+      break;
+    case WIFI_STATE_OPERATING:
+      switch (tcp_server_state) {
+      case TCP_SERVER_STATE_IDLE:
+        if(wifi_response_index >= 10 && !strcmp(wifi_response + wifi_response_index - 10, ",CONNECT\r\n")) {
+          wifi_response_index = 0;
+          memset(wifi_response, 0, sizeof(wifi_response));
+        } else if (wifi_response_index >= 9 && !strcmp(wifi_response + wifi_response_index - 9, ",CLOSED\r\n")) {
+          wifi_response_index = 0;
+          memset(wifi_response, 0, sizeof(wifi_response));
+        } else if (wifi_response_index >= 9 && !strcmp(wifi_response + wifi_response_index - 9, "SEND OK\r\n")) {
+          wifi_response_index = 0;
+          memset(wifi_response, 0, sizeof(wifi_response));
+        } else if (wifi_response_index >= 5 && !strcmp(wifi_response + wifi_response_index - 5, "+IPD,")) {
+          tcp_server_state = TCP_SERVER_STATE_READING_CLIENT_ID;
+          wifi_response_index = 0;
+          memset(wifi_response, 0, sizeof(wifi_response));
+        }
+        break;
+      case TCP_SERVER_STATE_READING_CLIENT_ID:
+        if (received_byte == ',') {
+          tcp_server_state = TCP_SERVER_STATE_READING_DATA_LENGTH;
+          wifi_response[wifi_response_index - 1] = '\0';
+          sscanf(wifi_response, "%"SCNu32"", &tcp_server_client_id);
+          wifi_response_index = 0;
+          memset(wifi_response, 0, sizeof(wifi_response));
+        }
+        break;
+      case TCP_SERVER_STATE_READING_DATA_LENGTH:
+        if (received_byte == ':') {
+          tcp_server_state = TCP_SERVER_STATE_READING_DATA;
+          wifi_response[wifi_response_index - 1] = '\0';
+          sscanf(wifi_response, "%"SCNu32"", &tcp_server_to_receive);
+          tcp_server_received = 0;
+          wifi_response_index = 0;
+          memset(wifi_response, 0, sizeof(wifi_response));
+        }
+        break;
+      case TCP_SERVER_STATE_READING_DATA:
+        if (++tcp_server_received == tcp_server_to_receive) {
+          tcp_server_state = TCP_SERVER_STATE_IDLE;
+          wifi_process_tcp_data(huart, tcp_server_client_id, tcp_server_received);
+          wifi_response_index = 0;
+          memset(wifi_response, 0, sizeof(wifi_response));
+        }
+        break;
+      case TCP_SERVER_STATE_SENDING_DATA:
+        if(wifi_response_index >= 6 && !strcmp(wifi_response + wifi_response_index - 6, "OK\r\n> ")) {
+          tcp_server_state = TCP_SERVER_STATE_IDLE;
+          HAL_UART_Transmit_IT(huart, (uint8_t*)tcp_response, tcp_response_length);
+          wifi_response_index = 0;
+          memset(wifi_response, 0, sizeof(wifi_response));
+        }
+        break;
+      }
+      break;
+    }
+
+    HAL_UART_Receive_IT(huart, (uint8_t*)wifi_uart.rx_buffer, sizeof(wifi_uart.rx_buffer));
+  } else if (huart->Instance == USART2) {
+    const char received_byte = command_uart.rx_buffer[0];
+    switch (received_byte) {
+    default:
+      if (command_buffer_index >= sizeof(command_buffer)) {
+        if (!command_uart.rx_buffer_overflow) {
+          command_uart.rx_buffer_overflow = true;
+          sprintf(command_tx_buffer, "Error: command shouldn't be longer than %d\n", sizeof(command_buffer));
+          HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
           command_buffer_index = 0;
           memset(command_buffer, 0, sizeof(command_buffer));
+        }
+      } else {
+        command_buffer[command_buffer_index++] = received_byte;
       }
-    } else {
-      command_buffer[command_buffer_index++] = received_byte;
+      break;
+    case '\n':
+      command_buffer[command_buffer_index] = '\0';
+      command_buffer_index = 0;
+      if (!command_uart.rx_buffer_overflow) {
+        process_uart_command(huart);
+      }
+      command_uart.rx_buffer_overflow = false;
+      memset(command_buffer, 0, sizeof(command_buffer));
     }
-    break;
-  case '\n':
-    command_buffer[command_buffer_index] = '\0';
-    command_buffer_index = 0;
-    if (!uart_rx_buffer_overflow) {
-      process_uart_command(huart);
-    }
-    uart_rx_buffer_overflow = 0;
-    memset(command_buffer, 0, sizeof(command_buffer));
+    HAL_UART_Receive_IT(huart, (uint8_t*)command_uart.rx_buffer, sizeof(command_uart.rx_buffer));
+  } else if (huart->Instance == USART3) {
+
   }
-  HAL_UART_Receive_IT(huart, (uint8_t*)uart_rx_buffer, sizeof(uart_rx_buffer));
 }
 
 void process_uart_command(UART_HandleTypeDef *huart)
@@ -759,48 +963,48 @@ void process_uart_command(UART_HandleTypeDef *huart)
   char command[sizeof(command_buffer)] = {0};
 
   if (sscanf(command_buffer, "%s ", command) != 1) {
-    sprintf(uart_tx_buffer, "Error: cannot parse: %s\n", command_buffer);
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Error: cannot parse: %s\n", command_buffer);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
     return;
   }
 
   if (!strcmp(command, "help")) {
-    sprintf(uart_tx_buffer, "Commands:\nhelp\nget_time\nset_time <hh> <mm> <ss>\nget_daylight_time\ntrack_enable\ntrack_disable\nget_track\n");
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Commands:\nhelp\nget_time\nset_time <hh> <mm> <ss>\nget_daylight_time\ntrack_enable\ntrack_disable\nget_track\nconnect_wifi \"<ssid>\" \"<password>\"\n");
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   } else if (!strcmp(command, "get_time")) {
     RTC_TimeTypeDef time;
     RTC_DateTypeDef date;   // it won't work without reading date
     if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
         HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
-      sprintf(uart_tx_buffer, "Error: could not get time\n");
-      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      sprintf(command_tx_buffer, "Error: could not get time\n");
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
       return;
     }
-    sprintf(uart_tx_buffer, "Time: %02d:%02d:%02d\n", time.Hours, time.Minutes, time.Seconds);
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Time: %02d:%02d:%02d\n", time.Hours, time.Minutes, time.Seconds);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   } else if (!strcmp(command, "set_time")) {
     int hours = 0;
     int minutes = 0;
     int seconds = 0;
     const size_t offset = 9;
     if (sscanf(command_buffer + offset, "%d %d %d", &hours, &minutes, &seconds) != 3) {
-      sprintf(uart_tx_buffer, "Error: cannot parse hh mm ss: %s\n", command_buffer + offset);
-      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      sprintf(command_tx_buffer, "Error: cannot parse hh mm ss: %s\n", command_buffer + offset);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
       return;
     }
     if (hours < 0 || hours >= 24) {
-      sprintf(uart_tx_buffer, "Error: wrong hours value: %d\n", hours);
-      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      sprintf(command_tx_buffer, "Error: wrong hours value: %d\n", hours);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
       return;
     }
     if (minutes < 0 || minutes >= 60) {
-      sprintf(uart_tx_buffer, "Error: wrong minutes value: %d\n", minutes);
-      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      sprintf(command_tx_buffer, "Error: wrong minutes value: %d\n", minutes);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
       return;
     }
     if (seconds < 0 || seconds >= 60) {
-      sprintf(uart_tx_buffer, "Error: wrong seconds value: %d\n", seconds);
-      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      sprintf(command_tx_buffer, "Error: wrong seconds value: %d\n", seconds);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
       return;
     }
     // could sscanf directly to this struct, but it would break data validation
@@ -808,8 +1012,8 @@ void process_uart_command(UART_HandleTypeDef *huart)
     RTC_DateTypeDef date;   // it won't work without reading date
     if (HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
         HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
-      sprintf(uart_tx_buffer, "Error: could not set time\n");
-      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      sprintf(command_tx_buffer, "Error: could not set time\n");
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
       return;
     }
     time.Hours = hours;
@@ -817,22 +1021,22 @@ void process_uart_command(UART_HandleTypeDef *huart)
     time.Seconds = seconds;
     if (HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK ||
         HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK) {
-      sprintf(uart_tx_buffer, "Error: could not set time\n");
-      HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+      sprintf(command_tx_buffer, "Error: could not set time\n");
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
       return;
     }
-    sprintf(uart_tx_buffer, "Time set to %02d:%02d:%02d\n", hours, minutes, seconds);
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Time set to %02d:%02d:%02d\n", hours, minutes, seconds);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   } else if (!strcmp(command, "get_daylight_time")) {
     uint32_t light_duration = 0;
     if (HAL_I2C_Mem_Read(&hi2c1, EEPROM_I2C_ADDRESS, EEPROM_DATA_ADDRESS, 2, (uint8_t*)&light_duration, sizeof(light_duration), HAL_MAX_DELAY) != HAL_OK) {
-      //TODO: oy vey (HAL_BUSY)
+      //oy vey (HAL_BUSY)
     }
     const uint32_t seconds = light_duration / 10000;
     const uint32_t minutes = seconds / 60;
     const uint32_t hours   = minutes / 60;
-    sprintf(uart_tx_buffer, "Daylight time: %02"PRIu32":%02"PRIu32":%02"PRIu32"\n", hours, minutes % 60, seconds % 60);
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Daylight time: %02"PRIu32":%02"PRIu32":%02"PRIu32"\n", hours, minutes % 60, seconds % 60);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   } else if (!strcmp(command, "get_stopwatch")) {
     const uint32_t total_centiseconds = interface.stopwatch_mode.stopwatch / 100;
     const uint32_t total_seconds      = total_centiseconds / 100;
@@ -843,16 +1047,16 @@ void process_uart_command(UART_HandleTypeDef *huart)
     const uint32_t seconds            = total_seconds % 60;
     const uint32_t minutes            = total_minutes % 60;
     const uint32_t hours              = total_hours;
-    sprintf(uart_tx_buffer, "Last stopwatch: %02"PRIu32":%02"PRIu32":%02"PRIu32".%02"PRIu32"\n", hours, minutes, seconds, centiseconds);
-	  HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Last stopwatch: %02"PRIu32":%02"PRIu32":%02"PRIu32".%02"PRIu32"\n", hours, minutes, seconds, centiseconds);
+	  HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   } else if (!strcmp(command, "track_enable")) {
     track_enabled = true;
-    sprintf(uart_tx_buffer, "Track sampling enabled\n");
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Track sampling enabled\n");
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   } else if (!strcmp(command, "track_disable")) {
     track_enabled = false;
-    sprintf(uart_tx_buffer, "Track sampling disabled\n");
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Track sampling disabled\n");
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   } else if (!strcmp(command, "get_track")) {
     const uint32_t total_centiseconds = track_duration / 100;
     const uint32_t total_seconds      = total_centiseconds / 100;
@@ -863,12 +1067,58 @@ void process_uart_command(UART_HandleTypeDef *huart)
     const uint32_t seconds            = total_seconds % 60;
     const uint32_t minutes            = total_minutes % 60;
     const uint32_t hours              = total_hours;
-    sprintf(uart_tx_buffer, "Track duration: %02"PRIu32":%02"PRIu32":%02"PRIu32".%02"PRIu32"\n", hours, minutes, seconds, centiseconds);
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Track duration: %02"PRIu32":%02"PRIu32":%02"PRIu32".%02"PRIu32"\n", hours, minutes, seconds, centiseconds);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
+  } else if (!strcmp(command, "connect_wifi")) {
+    if (wifi_state != WIFI_STATE_WAITING_WIFI_CREDENTIALS) {
+      sprintf(command_tx_buffer, "Error: Wi-Fi module not ready\n");
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
+      return;
+    }
+    const size_t offset = 13;
+    if (sscanf(command_buffer + offset, "\"%[^\"]\" \"%[^\"]\"", ssid, password) != 2) {
+      sprintf(command_tx_buffer, "Error: cannot parse \"<ssid>\" \"<password>\": %s\n", command_buffer + offset);
+      HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
+      return;
+    }
+    wifi_state = WIFI_STATE_CWJAP_WAITING;
+    const int len = sprintf(wifi_tx_buffer, "AT+CWJAP=\"%s\",\"%s\"\r\n", ssid, password);
+    HAL_UART_Transmit_IT(&huart1, (uint8_t*)wifi_tx_buffer, len);
+    sprintf(command_tx_buffer, "Connecting to Wi-Fi\n");
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   } else {
-    sprintf(uart_tx_buffer, "Error: unknown command: %s\n", command);
-    HAL_UART_Transmit_IT(huart, (uint8_t*)uart_tx_buffer, strlen(uart_tx_buffer));
+    sprintf(command_tx_buffer, "Error: unknown command: %s\n", command);
+    HAL_UART_Transmit_IT(huart, (uint8_t*)command_tx_buffer, strlen(command_tx_buffer));
   }
+}
+
+void wifi_init(UART_HandleTypeDef *huart)
+{
+  int len = sprintf(wifi_tx_buffer, "AT+RST\r\nAT+RESTORE\r\n");
+  HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
+
+  HAL_Delay(5000);
+
+  wifi_uart.rx_buffer_overflow = false;
+  wifi_response_index = 0;
+  memset(wifi_response, 0, sizeof(wifi_response));
+
+  wifi_state = WIFI_STATE_ATE_WAITING;
+  len = sprintf(wifi_tx_buffer, "ATE0\r\n");
+  HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
+  HAL_UART_Receive_IT(huart, (uint8_t*)wifi_uart.rx_buffer, sizeof(wifi_uart.rx_buffer));
+}
+
+void wifi_process_tcp_data(UART_HandleTypeDef *huart, uint32_t client, uint32_t data_length)
+{
+  //TODO: process HTTP
+
+
+  tcp_server_state = TCP_SERVER_STATE_SENDING_DATA;
+  memset(tcp_response, 0, sizeof(tcp_response));
+  tcp_response_length = sprintf(tcp_response, "hello\n");
+  const int len = sprintf(wifi_tx_buffer, "AT+CIPSEND=%"PRIu32",%"PRIu32"\r\n", client, tcp_response_length);
+  HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
