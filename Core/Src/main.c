@@ -39,7 +39,6 @@ typedef struct {
 
 typedef enum {
   WIFI_STATE_INITIAL,
-  WIFI_STATE_ATE_WAITING,
   WIFI_STATE_CWMODE_WAITING,
   WIFI_STATE_CIPMODE_WAITING,
   WIFI_STATE_CIPMUX_WAITING,
@@ -815,15 +814,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
     switch (wifi_state) {
     case WIFI_STATE_INITIAL: break;
-    case WIFI_STATE_ATE_WAITING:
-      if(wifi_response_index >= 6 && !strcmp(wifi_response + wifi_response_index - 6, "ATE0\r\n")) {
-        wifi_state = WIFI_STATE_CWMODE_WAITING;
-        const int len = sprintf(wifi_tx_buffer, "AT+CWMODE=1\r\n");
-        HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
-        wifi_response_index = 0;
-        memset(wifi_response, 0, sizeof(wifi_response));
-      }
-      break;
     case WIFI_STATE_CWMODE_WAITING:
       if(wifi_response_index >= 4 && !strcmp(wifi_response + wifi_response_index - 4, "OK\r\n")) {
         wifi_state = WIFI_STATE_CIPMODE_WAITING;
@@ -1077,6 +1067,9 @@ void wifi_init(UART_HandleTypeDef *huart)
   HAL_Delay(1000);
   len = sprintf(wifi_tx_buffer, "AT+RESTORE\r\n");
   HAL_UART_Transmit(huart, (uint8_t*)wifi_tx_buffer, len, HAL_MAX_DELAY);
+  HAL_Delay(1000);
+  len = sprintf(wifi_tx_buffer, "ATE0\r\n");
+  HAL_UART_Transmit(huart, (uint8_t*)wifi_tx_buffer, len, HAL_MAX_DELAY);
 
   HAL_Delay(3000);
 
@@ -1084,8 +1077,8 @@ void wifi_init(UART_HandleTypeDef *huart)
   wifi_response_index = 0;
   memset(wifi_response, 0, sizeof(wifi_response));
 
-  wifi_state = WIFI_STATE_ATE_WAITING;
-  len = sprintf(wifi_tx_buffer, "ATE0\r\n");
+  wifi_state = WIFI_STATE_CWMODE_WAITING;
+  len = sprintf(wifi_tx_buffer, "AT+CWMODE=1\r\n");
   HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
   HAL_UART_Receive_IT(huart, (uint8_t*)wifi_uart.rx_buffer, sizeof(wifi_uart.rx_buffer));
 }
