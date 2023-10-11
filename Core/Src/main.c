@@ -27,6 +27,7 @@
 #include <led.h>
 #include <stdbool.h>
 #include "interface.h"
+#include "index.html.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -118,7 +119,7 @@ char command_tx_buffer[512];
 uart_state wifi_uart = {false, {0}};
 char wifi_response[1024] = {0};
 size_t wifi_response_index = 0;
-char wifi_tx_buffer[2048];
+char wifi_tx_buffer[8192];
 wifi_state_t wifi_state = WIFI_STATE_INITIAL;
 tcp_server_state_t tcp_server_state = TCP_SERVER_STATE_IDLE;
 uint32_t tcp_server_client_id = 0;
@@ -1094,10 +1095,16 @@ void process_uart_command(UART_HandleTypeDef *huart)
 
 void wifi_init(UART_HandleTypeDef *huart)
 {
-  int len = sprintf(wifi_tx_buffer, "AT+RST\r\nAT+RESTORE\r\n");
-  HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
+  int len = sprintf(wifi_tx_buffer, "AT+CWQAP\r\n");
+  HAL_UART_Transmit(huart, (uint8_t*)wifi_tx_buffer, len, HAL_MAX_DELAY);
+  HAL_Delay(1000);
+  len = sprintf(wifi_tx_buffer, "AT+RST\r\n");
+  HAL_UART_Transmit(huart, (uint8_t*)wifi_tx_buffer, len, HAL_MAX_DELAY);
+  HAL_Delay(1000);
+  len = sprintf(wifi_tx_buffer, "AT+RESTORE\r\n");
+  HAL_UART_Transmit(huart, (uint8_t*)wifi_tx_buffer, len, HAL_MAX_DELAY);
 
-  HAL_Delay(5000);
+  HAL_Delay(3000);
 
   wifi_uart.rx_buffer_overflow = false;
   wifi_response_index = 0;
@@ -1116,7 +1123,12 @@ void wifi_process_tcp_data(UART_HandleTypeDef *huart, uint32_t client, uint32_t 
 
   tcp_server_state = TCP_SERVER_STATE_SENDING_DATA;
   memset(tcp_response, 0, sizeof(tcp_response));
-  tcp_response_length = sprintf(tcp_response, "hello\n");
+
+//  tcp_response_length = index_html_length;
+//  memcpy(tcp_response, index_html, index_html_length);
+  tcp_response_length = sprintf(tcp_response, "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\n\r\n");
+  memcpy(tcp_response + tcp_response_length, index_html, index_html_length);
+  tcp_response_length += index_html_length;
   const int len = sprintf(wifi_tx_buffer, "AT+CIPSEND=%"PRIu32",%"PRIu32"\r\n", client, tcp_response_length);
   HAL_UART_Transmit_IT(huart, (uint8_t*)wifi_tx_buffer, len);
 }
