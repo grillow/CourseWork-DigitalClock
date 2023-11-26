@@ -196,6 +196,13 @@ int main(void)
   } else {
     light_sensor_state = 1;
   }
+
+  sound_sensor = button_create(
+      RESET,
+      HAL_GetTick(),
+      SOUND_SENSOR_BOUNCING_TIME_MS,
+      &SOUND_SENSOR_Callback
+  );
   if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
     Error_Handler();
   }
@@ -209,13 +216,6 @@ int main(void)
 //  HAL_ADC_Start(&hadc1);
 //  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
 //  const uint32_t value = HAL_ADC_GetValue(&hadc1);
-  sound_sensor = button_create(
-//      value <= SOUND_SENSOR_THRESHOLD ? SET : RESET,
-      RESET,
-      HAL_GetTick(),
-      SOUND_SENSOR_BOUNCING_TIME_MS,
-      &SOUND_SENSOR_Callback
-  );
   while (1)
   {
     /* USER CODE END WHILE */
