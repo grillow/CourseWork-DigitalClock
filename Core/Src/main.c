@@ -1180,11 +1180,21 @@ void SOUND_SENSOR_Callback(button_state_t old, button_state_t new)
     HAL_TIM_Base_Stop_IT(&htim4);
     track_acc += htim4.Instance->CNT;
     track_duration = track_acc;
+
+    if (track_enabled) {
+      const char *track_stopped_string = "Track stopped\n";
+      HAL_UART_Transmit_IT(&huart2, (uint8_t*)track_stopped_string, strlen(track_stopped_string));
+    }
   } else if (old == BUTTON_SET_REQUESTED && new == BUTTON_SET) {
     if (track_enabled) {
       track_acc = 0;
       htim4.Instance->CNT = 0;
       HAL_TIM_Base_Start_IT(&htim4);
+    }
+
+    if (track_enabled) {
+      const char *track_started_string = "Track started\n";
+      HAL_UART_Transmit_IT(&huart2, (uint8_t*)track_started_string, strlen(track_started_string));
     }
   }
 }
